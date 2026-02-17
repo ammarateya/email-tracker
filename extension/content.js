@@ -1,122 +1,137 @@
-// Content script for Gmail — injects tracking on send and shows status in inbox
+// Content script for Gmail — injects tracking on compose and shows status in inbox
 
 (function () {
     'use strict';
 
-    let trackingEnabled = true;
+    // ── Compose: Inject pixel immediately, register on send ──
 
-    // ── Compose: Intercept Send ──
-    // Gmail's send button triggers a click. We observe the compose windows,
-    // add a listener to the send button, and inject the tracking pixel + wrap links.
-
-    function observeCompose() {
-        const observer = new MutationObserver(() => {
-            // Find compose windows (div with role="dialog" containing a send button)
-            const composeWindows = document.querySelectorAll('div[role="dialog"]');
-            composeWindows.forEach(setupCompose);
-
-            // Also handle inline compose (reply)
-            const inlineCompose = document.querySelectorAll('.ip.iq');
-            inlineCompose.forEach(setupCompose);
-        });
-
-        observer.observe(document.body, { childList: true, subtree: true });
+    function generateId() {
+        const arr = new Uint8Array(6);
+        crypto.getRandomValues(arr);
+        return Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
     }
 
     const processedComposes = new WeakSet();
 
+    function observeCompose() {
+        const observer = new MutationObserver(() => {
+            document.querySelectorAll('div[role="dialog"]').forEach(setupCompose);
+            // Inline reply
+            document.querySelectorAll('.ip.iq').forEach(setupCompose);
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    function getBodyEl(composeEl) {
+        return composeEl.querySelector(
+            'div[g_editable="true"][role="textbox"], div.Am.Al.editable, div[role="textbox"][aria-label*="Body"]'
+        );
+    }
+
     function setupCompose(composeEl) {
         if (processedComposes.has(composeEl)) return;
+
+        const bodyEl = getBodyEl(composeEl);
+        if (!bodyEl) return;
+
         processedComposes.add(composeEl);
 
-        // Find the send button - Gmail uses div[role="button"] with specific data attributes
-        // The send button typically has aria-label containing "Send" or data-tooltip="Send"
-        const sendBtns = composeEl.querySelectorAll('div[role="button"][aria-label*="Send"], div[role="button"][data-tooltip*="Send"]');
+        // Generate tracking ID and inject pixel immediately
+        const trackingId = generateId();
+        composeEl.dataset.trackingId = trackingId;
+
+        // Get server URL and inject pixel
+        chrome.runtime.sendMessage({ type: 'GET_SERVER_URL' }, (res) => {
+            const server = res.url;
+            composeEl.dataset.serverUrl = server;
+
+            const pixelImg = document.createElement('img');
+            pixelImg.src = `${server}/t/${trackingId}.png`;
+            pixelImg.width = 1;
+            pixelImg.height = 1;
+            pixelImg.style.cssText = 'display:block !important;width:1px !important;height:1px !important;opacity:0 !important;position:absolute !important;pointer-events:none !important;';
+            pixelImg.alt = '';
+            pixelImg.dataset.tracker = 'true';
+            bodyEl.appendChild(pixelImg);
+
+            console.log('[Email Tracker] Pixel injected:', trackingId);
+        });
+
+        // Find ALL send buttons (Gmail's original + MailSuite's replacement)
+        // Gmail send: class T-I with aoO, aria-label contains "Send"
+        // MailSuite send: same but with mt-send class
+        const sendBtns = composeEl.querySelectorAll('.T-I.aoO, div[role="button"][aria-label*="Send"]');
 
         sendBtns.forEach(btn => {
-            if (btn.dataset.trackerBound) return;
-            btn.dataset.trackerBound = 'true';
+            if (btn.dataset.etBound) return;
+            btn.dataset.etBound = 'true';
 
-            btn.addEventListener('click', async (e) => {
-                if (!trackingEnabled) return;
-
-                // Extract email details from compose window
-                const recipientEls = composeEl.querySelectorAll('span[email], div[data-hovercard-id]');
-                const recipients = [];
-                recipientEls.forEach(el => {
-                    const email = el.getAttribute('email') || el.getAttribute('data-hovercard-id') || el.textContent;
-                    if (email && email.includes('@')) recipients.push(email);
-                });
-                const recipient = recipients[0] || '';
-
-                // Subject
-                const subjectInput = composeEl.querySelector('input[name="subjectbox"]');
-                const subject = subjectInput ? subjectInput.value : document.title.replace(' - Gmail', '').replace('Re: ', '').replace('Fwd: ', '');
-
-                // Body - the contenteditable div
-                const bodyEl = composeEl.querySelector('div[role="textbox"][aria-label*="Body"], div[role="textbox"][g_editable="true"], div.Am.Al.editable');
-                if (!bodyEl) return;
-
-                // Collect links in the body
-                const linkEls = bodyEl.querySelectorAll('a[href]');
-                const linkUrls = [];
-                linkEls.forEach(a => {
-                    const href = a.getAttribute('href');
-                    if (href && href.startsWith('http') && !href.includes('mail.google.com')) {
-                        linkUrls.push(href);
-                    }
-                });
-
-                // Register tracking with server
-                const result = await chrome.runtime.sendMessage({
-                    type: 'CREATE_TRACKING',
-                    data: { subject, recipient, links: linkUrls }
-                });
-
-                if (!result || !result.ok) {
-                    console.warn('[Email Tracker] Failed to create tracking:', result?.error);
-                    return;
-                }
-
-                const server = result.server;
-
-                // Inject tracking pixel at end of body
-                const pixelImg = document.createElement('img');
-                pixelImg.src = `${server}${result.pixel_url}`;
-                pixelImg.width = 1;
-                pixelImg.height = 1;
-                pixelImg.style.cssText = 'display:block;width:1px;height:1px;opacity:0;';
-                pixelImg.alt = '';
-                bodyEl.appendChild(pixelImg);
-
-                // Wrap links with tracked URLs
-                if (result.links && result.links.length > 0) {
-                    const urlMap = {};
-                    result.links.forEach(l => {
-                        urlMap[l.original_url] = `${server}${l.tracked_url}`;
-                    });
-
-                    linkEls.forEach(a => {
-                        const href = a.getAttribute('href');
-                        if (urlMap[href]) {
-                            a.setAttribute('href', urlMap[href]);
-                        }
-                    });
-                }
-
-                console.log('[Email Tracker] Tracking injected for:', subject, '->', recipient);
-            }, true); // capture phase to run before Gmail's handler
+            btn.addEventListener('click', () => {
+                onSend(composeEl);
+            }, true); // capture phase
         });
+
+        // Also catch Cmd+Enter / Ctrl+Enter
+        composeEl.addEventListener('keydown', (e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                onSend(composeEl);
+            }
+        }, true);
+    }
+
+    function onSend(composeEl) {
+        const trackingId = composeEl.dataset.trackingId;
+        const server = composeEl.dataset.serverUrl;
+        if (!trackingId || !server) return;
+
+        // Prevent double-registration
+        if (composeEl.dataset.trackingSent) return;
+        composeEl.dataset.trackingSent = 'true';
+
+        // Extract recipient
+        const recipientEls = composeEl.querySelectorAll('span[email]');
+        const recipients = [];
+        recipientEls.forEach(el => {
+            const email = el.getAttribute('email');
+            if (email && email.includes('@')) recipients.push(email);
+        });
+        const recipient = recipients[0] || '';
+
+        // Subject
+        const subjectInput = composeEl.querySelector('input[name="subjectbox"]');
+        const subject = subjectInput ? subjectInput.value : '';
+
+        // Collect links in body (exclude tracker pixel and mailsuite stuff)
+        const bodyEl = getBodyEl(composeEl);
+        const linkUrls = [];
+        if (bodyEl) {
+            bodyEl.querySelectorAll('a[href]').forEach(a => {
+                const href = a.getAttribute('href');
+                if (href && href.startsWith('http') && !href.includes('mail.google.com') && !href.includes(server)) {
+                    linkUrls.push(href);
+                }
+            });
+
+            // Wrap links with tracked redirects synchronously using beacon
+            // We'll do link wrapping in the registration call's response
+            // For now, fire-and-forget the registration
+        }
+
+        // Register with server (fire and forget — pixel is already in the email)
+        chrome.runtime.sendMessage({
+            type: 'CREATE_TRACKING',
+            data: { subject, recipient, links: linkUrls, emailId: trackingId }
+        });
+
+        console.log('[Email Tracker] Registered:', trackingId, subject, '->', recipient);
     }
 
     // ── Inbox: Show tracking status ──
 
     async function updateInboxStatus() {
-        // Find email rows in inbox
         const rows = document.querySelectorAll('tr.zA');
         if (rows.length === 0) return;
 
-        // Collect subject + sender info from rows
         const emailsToCheck = [];
         const rowMap = new Map();
 
@@ -153,7 +168,6 @@
             rows.forEach(row => {
                 row.dataset.trackerChecked = 'true';
 
-                // Remove existing badge if any
                 const existing = row.querySelector('.email-tracker-badge');
                 if (existing) existing.remove();
 
@@ -171,7 +185,6 @@
                         badge.title = 'Tracked — not yet opened';
                     }
 
-                    // Insert badge in the subject cell
                     const subjectCell = row.querySelector('.xT, .a4W');
                     if (subjectCell) {
                         subjectCell.style.position = 'relative';
@@ -204,16 +217,13 @@
     registerMyIp();
     observeCompose();
 
-    // Check inbox status periodically
     setInterval(updateInboxStatus, 5000);
     setTimeout(updateInboxStatus, 2000);
 
-    // Also check when URL changes (navigation within Gmail)
     let lastUrl = location.href;
     new MutationObserver(() => {
         if (location.href !== lastUrl) {
             lastUrl = location.href;
-            // Reset checked state on navigation
             document.querySelectorAll('[data-tracker-checked]').forEach(el => {
                 delete el.dataset.trackerChecked;
             });

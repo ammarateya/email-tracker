@@ -84,16 +84,17 @@ async def track_open(tracking_id: str, request: Request):
                 headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
             )
 
-        row = await db.execute_fetchall(
-            "SELECT id FROM emails WHERE id = ?", (tracking_id,)
+        # Create email record if it doesn't exist yet (pixel may load before registration)
+        await db.execute(
+            "INSERT OR IGNORE INTO emails (id, subject, recipient) VALUES (?, '', '')",
+            (tracking_id,),
         )
-        if row:
-            country = await geolocate_ip(ip)
-            await db.execute(
-                "INSERT INTO events (email_id, event_type, ip, user_agent, country) VALUES (?, 'open', ?, ?, ?)",
-                (tracking_id, ip, request.headers.get("user-agent", ""), country),
-            )
-            await db.commit()
+        country = await geolocate_ip(ip)
+        await db.execute(
+            "INSERT INTO events (email_id, event_type, ip, user_agent, country) VALUES (?, 'open', ?, ?, ?)",
+            (tracking_id, ip, request.headers.get("user-agent", ""), country),
+        )
+        await db.commit()
     finally:
         await db.close()
 
@@ -149,7 +150,7 @@ async def track_click(link_id: str, request: Request):
 async def create_email(request: Request):
     """Register a new tracked email. Body: {subject, recipient, links: [url, ...]}"""
     body = await request.json()
-    email_id = uuid.uuid4().hex[:12]
+    email_id = body.get("emailId") or uuid.uuid4().hex[:12]
     subject = body.get("subject", "")
     recipient = body.get("recipient", "")
     link_urls = body.get("links", [])
@@ -157,7 +158,9 @@ async def create_email(request: Request):
     db = await get_db()
     try:
         await db.execute(
-            "INSERT INTO emails (id, subject, recipient) VALUES (?, ?, ?)",
+            "INSERT INTO emails (id, subject, recipient) VALUES (?, ?, ?) "
+            "ON CONFLICT(id) DO UPDATE SET subject=excluded.subject, recipient=excluded.recipient "
+            "WHERE subject = '' OR recipient = ''",
             (email_id, subject, recipient),
         )
 
