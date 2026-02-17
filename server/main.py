@@ -325,5 +325,11 @@ async def get_stats():
     return t
 
 
-# Serve dashboard static files
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+# Serve dashboard — static assets under /static, index.html at root
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+@app.get("/", response_class=HTMLResponse)
+async def dashboard():
+    with open("static/index.html") as f:
+        return f.read()

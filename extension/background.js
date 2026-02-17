@@ -1,6 +1,6 @@
 // Background service worker — handles API communication
 
-const DEFAULT_SERVER = 'http://localhost:8000';
+const DEFAULT_SERVER = 'https://mail.ammarateya.com';
 
 async function getServerUrl() {
     const result = await chrome.storage.sync.get(['serverUrl']);
