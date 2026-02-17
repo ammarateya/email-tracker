@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "Track email opens and link clicks from Gmail",
   "permissions": ["storage", "activeTab"],
-  "host_permissions": ["https://mail.google.com/*"],
+  "host_permissions": ["https://mail.google.com/*", "http://*/*", "https://*/*"],
   "background": {
     "service_worker": "background.js"
   },
