@@ -186,7 +186,22 @@
         return (subject + '||' + recipient).toLowerCase().replace(/\s+/g, ' ').trim();
     }
 
+    // ── Auto-ignore sender's IP ──
+    async function registerMyIp() {
+        try {
+            const server = await new Promise(resolve => {
+                chrome.runtime.sendMessage({ type: 'GET_SERVER_URL' }, res => resolve(res.url));
+            });
+            await fetch(`${server}/api/ignored-ips`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ label: 'Auto (Gmail extension)' }),
+            });
+        } catch {}
+    }
+
     // ── Init ──
+    registerMyIp();
     observeCompose();
 
     // Check inbox status periodically
