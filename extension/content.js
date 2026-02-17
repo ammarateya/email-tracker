@@ -198,10 +198,10 @@
                         badge.title = 'Tracked — not yet opened';
                     }
 
-                    const subjectCell = row.querySelector('.xT, .a4W');
-                    if (subjectCell) {
-                        subjectCell.style.position = 'relative';
-                        subjectCell.insertBefore(badge, subjectCell.firstChild);
+                    const recipientCell = row.querySelector('.yX');
+                    if (recipientCell) {
+                        recipientCell.style.position = 'relative';
+                        recipientCell.insertBefore(badge, recipientCell.firstChild);
                     }
                 }
             });
