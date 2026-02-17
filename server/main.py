@@ -397,6 +397,18 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 @app.get("/", response_class=HTMLResponse)
-async def dashboard():
+async def dashboard(request: Request):
+    """Serve dashboard and auto-ignore the viewer's IP."""
+    ip = client_ip(request)
+    if ip and ip not in ("127.0.0.1", "::1"):
+        db = await get_db()
+        try:
+            await db.execute(
+                "INSERT OR IGNORE INTO ignored_ips (ip, label) VALUES (?, ?)",
+                (ip, "Auto-detected (dashboard visit)"),
+            )
+            await db.commit()
+        finally:
+            await db.close()
     with open("static/index.html") as f:
         return f.read()
