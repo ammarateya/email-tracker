@@ -42,6 +42,10 @@
 
         // Get server URL and inject pixel
         chrome.runtime.sendMessage({ type: 'GET_SERVER_URL' }, (res) => {
+            if (!res || !res.url) {
+                console.error('[Email Tracker] Failed to get server URL');
+                return;
+            }
             const server = res.url;
             composeEl.dataset.serverUrl = server;
 
@@ -54,7 +58,7 @@
             pixelImg.dataset.tracker = 'true';
             bodyEl.appendChild(pixelImg);
 
-            console.log('[Email Tracker] Pixel injected:', trackingId);
+            console.log('[Email Tracker] Pixel injected:', trackingId, 'Server:', server);
         });
 
         // Find ALL send buttons (Gmail's original + MailSuite's replacement)
