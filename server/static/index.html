@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Tracker</title>
+    <style>
+        /* ── Reset & Base ── */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --bg: #f7f8fa;
+            --card: #ffffff;
+            --border: #e5e7eb;
+            --text: #111827;
+            --text-secondary: #6b7280;
+            --accent: #2563eb;
+            --accent-hover: #1d4ed8;
+            --green: #059669;
+            --green-bg: #ecfdf5;
+            --red: #dc2626;
+            --red-bg: #fef2f2;
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-300: #d1d5db;
+            --gray-400: #9ca3af;
+            --gray-500: #6b7280;
+            --radius: 8px;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+            --shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
+            --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            --mono: 'SF Mono', SFMono-Regular, 'Consolas', 'Liberation Mono', Menlo, monospace;
+        }
+        body {
+            font-family: var(--font);
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { color: var(--accent-hover); }
+
+        /* ── Layout ── */
+        .app { display: flex; min-height: 100vh; }
+        .sidebar {
+            width: 240px;
+            background: var(--card);
+            border-right: 1px solid var(--border);
+            padding: 24px 0;
+            position: fixed;
+            top: 0; left: 0; bottom: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .sidebar-logo {
+            padding: 0 20px 24px;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 8px;
+        }
+        .sidebar-logo svg { flex-shrink: 0; }
+        .sidebar nav { flex: 1; padding: 8px 12px; }
+        .sidebar nav a {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.15s;
+        }
+        .sidebar nav a:hover { background: var(--gray-50); color: var(--text); }
+        .sidebar nav a.active { background: var(--gray-100); color: var(--text); }
+        .sidebar nav a svg { flex-shrink: 0; opacity: 0.6; }
+        .sidebar nav a.active svg { opacity: 1; }
+
+        .main {
+            flex: 1;
+            margin-left: 240px;
+            padding: 32px 40px;
+            max-width: 1200px;
+        }
+
+        /* ── Page Header ── */
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+        .page-header h1 {
+            font-size: 22px;
+            font-weight: 600;
+        }
+        .page-header .subtitle {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-top: 2px;
+        }
+
+        /* ── Stat Cards ── */
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .stat-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            box-shadow: var(--shadow-sm);
+        }
+        .stat-card .label {
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+        .stat-card .value {
+            font-size: 28px;
+            font-weight: 600;
+            line-height: 1;
+        }
+        .stat-card .value.green { color: var(--green); }
+
+        /* ── Cards & Tables ── */
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-sm);
+            overflow: hidden;
+        }
+        .card-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .card-header h2 {
+            font-size: 15px;
+            font-weight: 600;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        thead th {
+            text-align: left;
+            padding: 10px 20px;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+            background: var(--gray-50);
+            border-bottom: 1px solid var(--border);
+        }
+        tbody td {
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--gray-100);
+            vertical-align: middle;
+        }
+        tbody tr:last-child td { border-bottom: none; }
+        tbody tr:hover { background: var(--gray-50); }
+        tbody tr { cursor: pointer; transition: background 0.1s; }
+
+        /* ── Status Badge ── */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .badge-green { background: var(--green-bg); color: var(--green); }
+        .badge-gray { background: var(--gray-100); color: var(--gray-500); }
+        .badge-dot {
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .badge-green .badge-dot { background: var(--green); }
+        .badge-gray .badge-dot { background: var(--gray-400); }
+
+        /* ── Search ── */
+        .search-input {
+            padding: 8px 12px 8px 36px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: var(--font);
+            outline: none;
+            width: 280px;
+            background: var(--card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E") 12px center no-repeat;
+            transition: border-color 0.15s;
+        }
+        .search-input:focus { border-color: var(--accent); }
+
+        /* ── Buttons ── */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            font-family: var(--font);
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.15s;
+        }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-outline { background: var(--card); color: var(--text); border-color: var(--border); }
+        .btn-outline:hover { background: var(--gray-50); }
+        .btn-danger { background: var(--red); color: white; }
+        .btn-danger:hover { background: #b91c1c; }
+        .btn-sm { padding: 5px 10px; font-size: 13px; }
+
+        /* ── Detail Page ── */
+        .detail-header {
+            margin-bottom: 24px;
+        }
+        .detail-header .back {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+        .detail-header .back:hover { color: var(--text); }
+        .detail-header h1 { font-size: 20px; font-weight: 600; }
+        .detail-header .meta {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-top: 4px;
+        }
+
+        .timeline {
+            padding: 20px;
+        }
+        .timeline-item {
+            display: flex;
+            gap: 16px;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--gray-100);
+            font-size: 14px;
+        }
+        .timeline-item:last-child { border-bottom: none; }
+        .timeline-icon {
+            width: 32px; height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .timeline-icon.open { background: var(--green-bg); color: var(--green); }
+        .timeline-icon.click { background: #eff6ff; color: var(--accent); }
+        .timeline-body { flex: 1; }
+        .timeline-body .title { font-weight: 500; }
+        .timeline-body .detail { color: var(--text-secondary); font-size: 13px; margin-top: 2px; }
+        .timeline-time { color: var(--text-secondary); font-size: 13px; white-space: nowrap; }
+
+        .link-stats-table td { font-size: 13px; }
+        .link-url {
+            max-width: 400px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-family: var(--mono);
+            font-size: 12px;
+        }
+
+        /* ── Chart ── */
+        .chart-container {
+            padding: 20px;
+            height: 200px;
+            position: relative;
+        }
+        .chart-bar-group {
+            display: flex;
+            align-items: flex-end;
+            gap: 3px;
+            height: 100%;
+        }
+        .chart-bar-col {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100%;
+            justify-content: flex-end;
+            gap: 4px;
+        }
+        .chart-bar {
+            width: 100%;
+            border-radius: 3px 3px 0 0;
+            min-height: 2px;
+            transition: height 0.3s;
+        }
+        .chart-bar.opens { background: var(--green); opacity: 0.8; }
+        .chart-bar.clicks { background: var(--accent); opacity: 0.8; }
+        .chart-label {
+            font-size: 10px;
+            color: var(--text-secondary);
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            max-height: 50px;
+            overflow: hidden;
+        }
+
+        /* ── Empty State ── */
+        .empty-state {
+            padding: 60px 20px;
+            text-align: center;
+            color: var(--text-secondary);
+        }
+        .empty-state svg { margin-bottom: 16px; opacity: 0.4; }
+        .empty-state h3 { color: var(--text); font-size: 16px; margin-bottom: 8px; }
+        .empty-state p { font-size: 14px; }
+
+        /* ── Loading ── */
+        .spinner {
+            width: 20px; height: 20px;
+            border: 2px solid var(--gray-200);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            margin: 40px auto;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── Pagination ── */
+        .pagination {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 20px;
+            border-top: 1px solid var(--border);
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        .pagination .pages { display: flex; gap: 4px; }
+
+        /* ── Responsive ── */
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .main { margin-left: 0; padding: 20px 16px; }
+            .stat-grid { grid-template-columns: 1fr 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                    <polyline points="22,6 12,13 2,6"/>
+                </svg>
+                Email Tracker
+            </div>
+            <nav>
+                <a href="#/" class="active" data-page="overview">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                    Overview
+                </a>
+                <a href="#/emails" data-page="emails">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                    Emails
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main" id="app"></main>
+    </div>
+
+    <script>
+    const API = '';  // same origin
+
+    // ── Router ──
+    function route() {
+        const hash = location.hash || '#/';
+        const parts = hash.replace('#', '').split('/').filter(Boolean);
+
+        // Update sidebar active state
+        document.querySelectorAll('.sidebar nav a').forEach(a => {
+            a.classList.toggle('active', a.getAttribute('href') === '#/' + (parts[0] || ''));
+        });
+
+        if (parts[0] === 'emails' && parts[1]) {
+            renderDetail(parts[1]);
+        } else if (parts[0] === 'emails') {
+            renderEmails();
+        } else {
+            renderOverview();
+        }
+    }
+
+    window.addEventListener('hashchange', route);
+    window.addEventListener('load', route);
+
+    // ── API helpers ──
+    async function api(path) {
+        const res = await fetch(API + path);
+        return res.json();
+    }
+
+    function timeAgo(dateStr) {
+        if (!dateStr) return 'Never';
+        const d = new Date(dateStr + (dateStr.endsWith('Z') ? '' : 'Z'));
+        const now = new Date();
+        const diff = (now - d) / 1000;
+        if (diff < 60) return 'Just now';
+        if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+        if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+        if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+
+    function formatDate(dateStr) {
+        if (!dateStr) return '';
+        const d = new Date(dateStr + (dateStr.endsWith('Z') ? '' : 'Z'));
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
+               ' at ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    }
+
+    // ── Overview Page ──
+    async function renderOverview() {
+        const app = document.getElementById('app');
+        app.innerHTML = '<div class="spinner"></div>';
+
+        const stats = await api('/api/stats');
+
+        app.innerHTML = `
+            <div class="page-header">
+                <div>
+                    <h1>Overview</h1>
+                    <div class="subtitle">Last 30 days of tracking activity</div>
+                </div>
+            </div>
+
+            <div class="stat-grid">
+                <div class="stat-card">
+                    <div class="label">Emails Tracked</div>
+                    <div class="value">${stats.total_emails}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Total Opens</div>
+                    <div class="value">${stats.total_opens}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Total Clicks</div>
+                    <div class="value">${stats.total_clicks}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Open Rate</div>
+                    <div class="value green">${stats.open_rate}%</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>Activity</h2>
+                    <div style="display:flex;gap:16px;font-size:12px;color:var(--text-secondary)">
+                        <span><span style="display:inline-block;width:10px;height:10px;background:var(--green);border-radius:2px;margin-right:4px"></span>Opens</span>
+                        <span><span style="display:inline-block;width:10px;height:10px;background:var(--accent);border-radius:2px;margin-right:4px"></span>Clicks</span>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    ${renderChart(stats.activity)}
+                </div>
+            </div>
+        `;
+    }
+
+    function renderChart(activity) {
+        if (!activity || activity.length === 0) {
+            return '<div class="empty-state"><p>No activity yet</p></div>';
+        }
+        const maxVal = Math.max(...activity.map(a => Math.max(a.opens || 0, a.clicks || 0)), 1);
+        return `<div class="chart-bar-group">
+            ${activity.map(a => {
+                const openH = Math.max(((a.opens || 0) / maxVal) * 140, 2);
+                const clickH = Math.max(((a.clicks || 0) / maxVal) * 140, 2);
+                const label = a.date.slice(5); // MM-DD
+                return `<div class="chart-bar-col">
+                    <div style="display:flex;gap:2px;align-items:flex-end;height:140px">
+                        <div class="chart-bar opens" style="height:${openH}px" title="${a.opens} opens"></div>
+                        <div class="chart-bar clicks" style="height:${clickH}px" title="${a.clicks} clicks"></div>
+                    </div>
+                    <div class="chart-label">${label}</div>
+                </div>`;
+            }).join('')}
+        </div>`;
+    }
+
+    // ── Emails List Page ──
+    let searchTimeout;
+    async function renderEmails(search = '') {
+        const app = document.getElementById('app');
+        app.innerHTML = `
+            <div class="page-header">
+                <div>
+                    <h1>Tracked Emails</h1>
+                    <div class="subtitle">All emails with tracking pixels</div>
+                </div>
+                <input type="text" class="search-input" placeholder="Search emails..." value="${search}" id="emailSearch">
+            </div>
+            <div class="card">
+                <div class="spinner"></div>
+            </div>
+        `;
+
+        document.getElementById('emailSearch').addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => renderEmails(e.target.value), 300);
+        });
+
+        const data = await api('/api/emails' + (search ? `?q=${encodeURIComponent(search)}` : ''));
+
+        const tableCard = app.querySelector('.card');
+        if (data.emails.length === 0) {
+            tableCard.innerHTML = `
+                <div class="empty-state">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                    <h3>No tracked emails yet</h3>
+                    <p>Send an email with the Chrome extension to start tracking.</p>
+                </div>`;
+            return;
+        }
+
+        tableCard.innerHTML = `
+            <table>
+                <thead>
+                    <tr>
+                        <th>Status</th>
+                        <th>Recipient</th>
+                        <th>Subject</th>
+                        <th>Opens</th>
+                        <th>Clicks</th>
+                        <th>Last Opened</th>
+                        <th>Sent</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${data.emails.map(e => `
+                        <tr onclick="location.hash='#/emails/${e.id}'">
+                            <td>${e.open_count > 0
+                                ? `<span class="badge badge-green"><span class="badge-dot"></span>Opened</span>`
+                                : `<span class="badge badge-gray"><span class="badge-dot"></span>Unopened</span>`
+                            }</td>
+                            <td style="font-weight:500">${esc(e.recipient)}</td>
+                            <td>${esc(e.subject)}</td>
+                            <td>${e.open_count}</td>
+                            <td>${e.click_count}</td>
+                            <td style="color:var(--text-secondary)">${timeAgo(e.last_opened)}</td>
+                            <td style="color:var(--text-secondary)">${timeAgo(e.created_at)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+            <div class="pagination">
+                <span>Showing ${data.emails.length} of ${data.total} emails</span>
+            </div>
+        `;
+    }
+
+    // ── Email Detail Page ──
+    async function renderDetail(id) {
+        const app = document.getElementById('app');
+        app.innerHTML = '<div class="spinner"></div>';
+
+        const email = await api(`/api/emails/${id}`);
+        if (email.error) {
+            app.innerHTML = '<div class="empty-state"><h3>Email not found</h3></div>';
+            return;
+        }
+
+        app.innerHTML = `
+            <div class="detail-header">
+                <a href="#/emails" class="back">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                    Back to emails
+                </a>
+                <h1>${esc(email.subject)}</h1>
+                <div class="meta">To: ${esc(email.recipient)} &middot; Sent ${formatDate(email.created_at)}</div>
+            </div>
+
+            <div class="stat-grid">
+                <div class="stat-card">
+                    <div class="label">Total Opens</div>
+                    <div class="value">${email.total_opens}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Unique Opens</div>
+                    <div class="value">${email.unique_opens}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Total Clicks</div>
+                    <div class="value">${email.total_clicks}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Status</div>
+                    <div class="value">${email.total_opens > 0
+                        ? '<span style="color:var(--green)">Opened</span>'
+                        : '<span style="color:var(--gray-400)">Unopened</span>'
+                    }</div>
+                </div>
+            </div>
+
+            ${email.link_stats.length > 0 ? `
+            <div class="card" style="margin-bottom:24px">
+                <div class="card-header"><h2>Link Performance</h2></div>
+                <table class="link-stats-table">
+                    <thead><tr><th>URL</th><th>Clicks</th></tr></thead>
+                    <tbody>
+                        ${email.link_stats.map(l => `
+                            <tr>
+                                <td><div class="link-url" title="${esc(l.original_url)}">${esc(l.original_url)}</div></td>
+                                <td>${l.click_count}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+            ` : ''}
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>Activity Timeline</h2>
+                    <span style="font-size:13px;color:var(--text-secondary)">${email.events.length} events</span>
+                </div>
+                ${email.events.length === 0
+                    ? '<div class="empty-state"><p>No activity yet</p></div>'
+                    : `<div class="timeline">
+                        ${email.events.map(ev => `
+                            <div class="timeline-item">
+                                <div class="timeline-icon ${ev.event_type}">
+                                    ${ev.event_type === 'open'
+                                        ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
+                                        : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>'
+                                    }
+                                </div>
+                                <div class="timeline-body">
+                                    <div class="title">${ev.event_type === 'open' ? 'Email opened' : `Clicked: ${esc(ev.original_url || 'link')}`}</div>
+                                    <div class="detail">${[ev.country, ev.ip, ev.user_agent ? shortenUA(ev.user_agent) : ''].filter(Boolean).join(' &middot; ')}</div>
+                                </div>
+                                <div class="timeline-time">${formatDate(ev.timestamp)}</div>
+                            </div>
+                        `).join('')}
+                    </div>`
+                }
+            </div>
+
+            <div style="margin-top:24px;text-align:right">
+                <button class="btn btn-danger btn-sm" onclick="deleteEmail('${email.id}')">Delete Email</button>
+            </div>
+        `;
+    }
+
+    async function deleteEmail(id) {
+        if (!confirm('Delete this tracked email and all its data?')) return;
+        await fetch(API + `/api/emails/${id}`, { method: 'DELETE' });
+        location.hash = '#/emails';
+    }
+
+    function esc(str) {
+        if (!str) return '';
+        const d = document.createElement('div');
+        d.textContent = str;
+        return d.innerHTML;
+    }
+
+    function shortenUA(ua) {
+        if (ua.includes('Chrome')) return 'Chrome';
+        if (ua.includes('Firefox')) return 'Firefox';
+        if (ua.includes('Safari')) return 'Safari';
+        if (ua.includes('Outlook')) return 'Outlook';
+        if (ua.includes('Thunderbird')) return 'Thunderbird';
+        if (ua.length > 30) return ua.slice(0, 30) + '...';
+        return ua;
+    }
+    </script>
+</body>
+</html>
