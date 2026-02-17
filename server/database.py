@@ -40,6 +40,12 @@ async def init_db():
             country TEXT
         );
 
+        CREATE TABLE IF NOT EXISTS ignored_ips (
+            ip TEXT PRIMARY KEY,
+            label TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE INDEX IF NOT EXISTS idx_events_email_id ON events(email_id);
         CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
         CREATE INDEX IF NOT EXISTS idx_links_email_id ON links(email_id);

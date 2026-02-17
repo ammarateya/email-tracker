@@ -71,11 +71,23 @@ async def track_open(tracking_id: str, request: Request):
     """Serve tracking pixel and log open event."""
     db = await get_db()
     try:
+        ip = client_ip(request)
+
+        # Skip ignored IPs (your own devices)
+        ignored = await db.execute_fetchall(
+            "SELECT ip FROM ignored_ips WHERE ip = ?", (ip,)
+        )
+        if ignored:
+            return Response(
+                content=PIXEL_PNG,
+                media_type="image/png",
+                headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+            )
+
         row = await db.execute_fetchall(
             "SELECT id FROM emails WHERE id = ?", (tracking_id,)
         )
         if row:
-            ip = client_ip(request)
             country = await geolocate_ip(ip)
             await db.execute(
                 "INSERT INTO events (email_id, event_type, ip, user_agent, country) VALUES (?, 'open', ?, ?, ?)",
@@ -109,12 +121,18 @@ async def track_click(link_id: str, request: Request):
 
         link = rows[0]
         ip = client_ip(request)
-        country = await geolocate_ip(ip)
-        await db.execute(
-            "INSERT INTO events (email_id, link_id, event_type, ip, user_agent, country) VALUES (?, ?, 'click', ?, ?, ?)",
-            (link["email_id"], link_id, ip, request.headers.get("user-agent", ""), country),
+
+        # Skip ignored IPs (your own devices)
+        ignored = await db.execute_fetchall(
+            "SELECT ip FROM ignored_ips WHERE ip = ?", (ip,)
         )
-        await db.commit()
+        if not ignored:
+            country = await geolocate_ip(ip)
+            await db.execute(
+                "INSERT INTO events (email_id, link_id, event_type, ip, user_agent, country) VALUES (?, ?, 'click', ?, ?, ?)",
+                (link["email_id"], link_id, ip, request.headers.get("user-agent", ""), country),
+            )
+            await db.commit()
         redirect_url = link["original_url"]
     finally:
         await db.close()
@@ -323,6 +341,55 @@ async def get_stats():
         await db.close()
 
     return t
+
+
+# ---------------------------------------------------------------------------
+# Ignored IPs management
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/ignored-ips")
+async def list_ignored_ips():
+    db = await get_db()
+    try:
+        rows = await db.execute_fetchall("SELECT * FROM ignored_ips ORDER BY created_at DESC")
+        return [dict(r) for r in rows]
+    finally:
+        await db.close()
+
+
+@app.post("/api/ignored-ips")
+async def add_ignored_ip(request: Request):
+    """Add an IP to ignore. Body: {ip, label?} or pass no body to ignore your current IP."""
+    body = await request.json()
+    ip = body.get("ip") or client_ip(request)
+    label = body.get("label", "")
+    db = await get_db()
+    try:
+        await db.execute(
+            "INSERT OR IGNORE INTO ignored_ips (ip, label) VALUES (?, ?)", (ip, label)
+        )
+        await db.commit()
+    finally:
+        await db.close()
+    return {"ok": True, "ip": ip}
+
+
+@app.delete("/api/ignored-ips/{ip}")
+async def remove_ignored_ip(ip: str):
+    db = await get_db()
+    try:
+        await db.execute("DELETE FROM ignored_ips WHERE ip = ?", (ip,))
+        await db.commit()
+    finally:
+        await db.close()
+    return {"ok": True}
+
+
+@app.get("/api/my-ip")
+async def my_ip(request: Request):
+    """Returns the caller's IP as seen by the server. Useful for adding yourself to the ignore list."""
+    return {"ip": client_ip(request)}
 
 
 # Serve dashboard — static assets under /static, index.html at root
