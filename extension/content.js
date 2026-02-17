@@ -160,10 +160,19 @@
 
         if (emailsToCheck.length === 0) return;
 
-        const statuses = await chrome.runtime.sendMessage({
-            type: 'GET_STATUSES',
-            data: { emails: emailsToCheck }
-        });
+        let statuses;
+        try {
+            statuses = await chrome.runtime.sendMessage({
+                type: 'GET_STATUSES',
+                data: { emails: emailsToCheck }
+            });
+        } catch (err) {
+            if (err.message.includes('Extension context invalidated')) {
+                console.log('[Email Tracker] Extension reloaded, please refresh Gmail');
+                return;
+            }
+            throw err;
+        }
 
         if (!statuses) return;
 
@@ -206,15 +215,25 @@
     // ── Auto-ignore sender's IP ──
     async function registerMyIp() {
         try {
-            const server = await new Promise(resolve => {
-                chrome.runtime.sendMessage({ type: 'GET_SERVER_URL' }, res => resolve(res.url));
+            const server = await new Promise((resolve, reject) => {
+                chrome.runtime.sendMessage({ type: 'GET_SERVER_URL' }, res => {
+                    if (chrome.runtime.lastError) {
+                        reject(new Error(chrome.runtime.lastError.message));
+                    } else {
+                        resolve(res.url);
+                    }
+                });
             });
             await fetch(`${server}/api/ignored-ips`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ label: 'Auto (Gmail extension)' }),
             });
-        } catch {}
+        } catch (err) {
+            if (err.message.includes('Extension context invalidated')) {
+                console.log('[Email Tracker] Extension context invalidated, skipping IP registration');
+            }
+        }
     }
 
     // ── Init ──
