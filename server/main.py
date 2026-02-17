@@ -210,11 +210,12 @@ async def list_emails(
             f"""
             SELECT
                 e.id, e.subject, e.recipient, e.created_at,
-                COALESCE(SUM(CASE WHEN ev.event_type = 'open' THEN 1 ELSE 0 END), 0) as open_count,
-                COALESCE(SUM(CASE WHEN ev.event_type = 'click' THEN 1 ELSE 0 END), 0) as click_count,
-                MAX(CASE WHEN ev.event_type = 'open' THEN ev.timestamp END) as last_opened
+                COALESCE(SUM(CASE WHEN ev.event_type = 'open' AND ii.ip IS NULL THEN 1 ELSE 0 END), 0) as open_count,
+                COALESCE(SUM(CASE WHEN ev.event_type = 'click' AND ii.ip IS NULL THEN 1 ELSE 0 END), 0) as click_count,
+                MAX(CASE WHEN ev.event_type = 'open' AND ii.ip IS NULL THEN ev.timestamp END) as last_opened
             FROM emails e
             LEFT JOIN events ev ON ev.email_id = e.id
+            LEFT JOIN ignored_ips ii ON ii.ip = ev.ip
             {where}
             GROUP BY e.id
             ORDER BY e.created_at DESC
@@ -255,25 +256,44 @@ async def get_email(email_id: str):
         )
         email["events"] = [dict(e) for e in events]
 
-        # Unique opens by IP
+        # Unique opens by IP (excluding ignored IPs)
         unique_opens = await db.execute_fetchall(
-            "SELECT COUNT(DISTINCT ip) as count FROM events WHERE email_id = ? AND event_type = 'open'",
+            """
+            SELECT COUNT(DISTINCT ev.ip) as count 
+            FROM events ev 
+            WHERE ev.email_id = ? AND ev.event_type = 'open'
+            AND ev.ip NOT IN (SELECT ip FROM ignored_ips)
+            """,
             (email_id,),
         )
         email["unique_opens"] = unique_opens[0]["count"]
 
-        # Total counts
+        # Total counts (excluding ignored IPs for opens)
         counts = await db.execute_fetchall(
             """
             SELECT
-                COALESCE(SUM(CASE WHEN event_type = 'open' THEN 1 ELSE 0 END), 0) as total_opens,
-                COALESCE(SUM(CASE WHEN event_type = 'click' THEN 1 ELSE 0 END), 0) as total_clicks
-            FROM events WHERE email_id = ?
+                COALESCE(SUM(CASE WHEN ev.event_type = 'open' AND ii.ip IS NULL THEN 1 ELSE 0 END), 0) as total_opens,
+                COALESCE(SUM(CASE WHEN ev.event_type = 'click' AND ii.ip IS NULL THEN 1 ELSE 0 END), 0) as total_clicks
+            FROM events ev
+            LEFT JOIN ignored_ips ii ON ii.ip = ev.ip
+            WHERE ev.email_id = ?
             """,
             (email_id,),
         )
         email["total_opens"] = counts[0]["total_opens"]
         email["total_clicks"] = counts[0]["total_clicks"]
+        
+        # Also add count of ignored opens for reference
+        ignored_counts = await db.execute_fetchall(
+            """
+            SELECT COUNT(*) as count 
+            FROM events ev
+            JOIN ignored_ips ii ON ii.ip = ev.ip
+            WHERE ev.email_id = ? AND ev.event_type = 'open'
+            """,
+            (email_id,),
+        )
+        email["ignored_opens"] = ignored_counts[0]["count"]
 
         # Link breakdown
         link_stats = await db.execute_fetchall(
