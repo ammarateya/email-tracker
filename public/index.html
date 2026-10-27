@@ -430,11 +430,7 @@
     window.addEventListener('load', route);
 
     // ── API helpers ──
-    function authHeaders() {
-        let key = sessionStorage.getItem('trackerApiKey');
-        if (!key) { key = prompt('Enter your Email Tracker API key'); if (key) sessionStorage.setItem('trackerApiKey', key); }
-        return { 'Authorization': `Bearer ${key || ''}`, 'Content-Type': 'application/json' };
-    }
+    function authHeaders() { return { 'Content-Type': 'application/json' }; }
     async function downloadCsv() {
         const response = await fetch(API + '/api/export.csv', { headers: authHeaders() });
         if (!response.ok) { alert('Could not export emails'); return; }
@@ -446,6 +442,7 @@
     }
     async function api(path) {
         const res = await fetch(API + path, { headers: authHeaders() });
+        if (res.status === 401) { location.replace('/login.html'); return {}; }
         return res.json();
     }
 
@@ -733,6 +730,14 @@
                 </div>
             </div>
 
+            <div class="card" style="margin-bottom:24px;padding:20px">
+                <h2>Account</h2><p id="accountEmail" style="margin:8px 0;color:var(--text-secondary)"></p>
+                <button class="btn btn-outline btn-sm" onclick="logout()">Sign out</button>
+                <h3 style="margin-top:24px">Connect browser extension</h3><p>Generate a one-time code, then enter it in the extension popup. It expires in 10 minutes.</p>
+                <button class="btn btn-primary btn-sm" onclick="makePairCode()">Generate pairing code</button>
+                <code id="pairCode" style="display:block;margin-top:10px;font-size:18px"></code>
+                <div id="inviteControls" hidden><h3 style="margin-top:24px">Invite someone</h3><p>Anyone with the invite link can create their own account. The link works once and expires in 7 days.</p><button class="btn btn-primary btn-sm" onclick="makeInvite()">Create invite link</button><p id="inviteLink" style="margin-top:10px;overflow-wrap:anywhere"></p></div>
+            </div>
             <div class="card" style="margin-bottom:24px">
                 <div class="card-header">
                     <h2>Ignored IPs</h2>
@@ -766,7 +771,14 @@
                 }
             </div>
         `;
+        const state = await api('/api/auth/state');
+        document.getElementById('accountEmail').textContent = state.user?.email || '';
+        document.getElementById('inviteControls').hidden = state.user?.role !== 'admin';
     }
+
+    async function makePairCode() { const r = await fetch('/api/auth/pair', { method: 'POST', headers: authHeaders() }); const d = await r.json(); document.getElementById('pairCode').textContent = d.code || d.error; }
+    async function makeInvite() { const r = await fetch('/api/auth/invite', { method: 'POST', headers: authHeaders() }); const d = await r.json(); const el = document.getElementById('inviteLink'); el.textContent = d.register_url || d.error; }
+    async function logout() { await fetch('/api/auth/logout', { method: 'POST', headers: authHeaders() }); location.replace('/login.html'); }
 
     async function addMyIp(ip) {
         await fetch(API + '/api/ignored-ips', {

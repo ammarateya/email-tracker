@@ -32,7 +32,7 @@
       prepared.add(compose);
       return true;
     } catch (error) {
-      alert(`Email Tracker could not prepare this message: ${error.message}. The email was not sent. Check your server URL and API key.`);
+      alert(`Email Tracker could not prepare this message: ${error.message}. The email was not sent. Check your extension account connection.`);
       return false;
     } finally { sending.delete(compose); }
   }

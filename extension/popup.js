@@ -1,29 +1,20 @@
 document.addEventListener('DOMContentLoaded', async () => {
   const serverInput = document.getElementById('serverUrl');
-  const keyInput = document.getElementById('apiKey');
-  const saveMsg = document.getElementById('saveMsg');
+  const codeInput = document.getElementById('pairCode');
   const status = document.getElementById('status');
   const list = document.getElementById('list');
   const config = await chrome.runtime.sendMessage({ type: 'GET_CONFIG' });
   serverInput.value = config.server;
-  keyInput.value = config.apiKey;
-  document.getElementById('openDashboard').addEventListener('click', event => {
-    event.preventDefault(); chrome.tabs.create({ url: serverInput.value });
-  });
-  let timer;
-  for (const input of [serverInput, keyInput]) input.addEventListener('input', () => {
-    clearTimeout(timer);
-    timer = setTimeout(async () => {
-      await chrome.runtime.sendMessage({ type: 'SET_CONFIG', serverUrl: serverInput.value.replace(/\/$/, ''), apiKey: keyInput.value });
-      saveMsg.classList.add('show'); setTimeout(() => saveMsg.classList.remove('show'), 1500);
-    }, 400);
-  });
+  document.getElementById('openDashboard').addEventListener('click', event => { event.preventDefault(); chrome.tabs.create({ url: serverInput.value }); });
+  document.getElementById('pairButton').onclick = async () => {
+    const result = await chrome.runtime.sendMessage({ type: 'PAIR', serverUrl: serverInput.value.trim(), code: codeInput.value.trim() });
+    if (!result.ok) { status.textContent = result.error; return; }
+    location.reload();
+  };
+  document.getElementById('disconnectButton').onclick = async () => { const result = await chrome.runtime.sendMessage({ type: 'DISCONNECT' }); if (result.ok) location.reload(); else status.textContent = result.error; };
+  if (!config.connected) { status.textContent = 'Not connected'; list.textContent = 'Sign in to the dashboard, open Settings, and generate a pairing code.'; return; }
   const recent = await chrome.runtime.sendMessage({ type: 'GET_RECENT' });
-  if (!recent.ok) {
-    status.textContent = recent.error || 'Cannot reach server';
-    list.textContent = 'Check the server URL and API key.';
-    return;
-  }
+  if (!recent.ok) { status.textContent = recent.error || 'Cannot reach server'; list.textContent = 'Check your account connection.'; return; }
   status.textContent = 'Connected';
   if (!recent.emails.length) { list.textContent = 'No tracked emails yet'; return; }
   for (const email of recent.emails) {

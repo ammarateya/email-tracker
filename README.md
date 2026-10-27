@@ -1,6 +1,6 @@
 # Email Tracker
 
-A personal Gmail open and link tracker with a dashboard. The Chrome extension adds a tracking pixel and rewrites links before Gmail sends the message. A Cloudflare Worker records events in D1. No paid MailSuite plan or subscription is required.
+A multi-user Gmail open and link tracker with a dashboard. The Chrome extension adds a tracking pixel and rewrites links before Gmail sends the message. A Cloudflare Worker records events in D1. No paid MailSuite plan or subscription is required.
 
 ## What it tracks
 
@@ -26,34 +26,35 @@ Copy the `database_id` from the create command into `wrangler.jsonc`. Set the Ch
 ```bash
 npx wrangler secret put API_KEY
 npx wrangler secret put EXTENSION_ID
+npx wrangler secret put BOOTSTRAP_CODE_HASH
 npm run db:remote
 npm run deploy
 ```
 
-Generate an API key with `openssl rand -hex 32`. For `EXTENSION_ID`, use the ID shown at `chrome://extensions` after loading the unpacked `extension/` directory. If it changes, update the secret. The dashboard asks for the API key and stores it only in that browser tab's session storage. Enter the same key in the extension popup. You can also add a custom domain to the Worker in Cloudflare after deployment.
+Generate a random server-only `API_KEY` with `openssl rand -hex 32`; it is used only for sender preview detection. Set `BOOTSTRAP_CODE_HASH` to the SHA-256 hex digest of a separate random setup code. Keep the original setup code privately for the first admin registration. For `EXTENSION_ID`, use the ID shown at `chrome://extensions` after loading the unpacked `extension/` directory. You can also add a custom domain to the Worker in Cloudflare after deployment.
 
 ### Extension
 
 1. Go to `chrome://extensions`, enable Developer mode, and load the `extension/` folder unpacked.
-2. Open the popup and enter the deployed Worker URL and API key.
+2. Sign in to the dashboard with email and password. Generate a pairing code in Settings, then enter the Worker URL and pairing code in the extension popup.
 3. Refresh Gmail. Compose and send a new message. Check the dashboard to see its activity.
 
 The extension pauses sending while registration completes. If registration fails, it keeps the message in the compose window and shows an error. Gmail changes its interface regularly, so refresh and test with a message to yourself after updating Gmail or the extension.
 
 ### Local development
 
-Create `.dev.vars` with `API_KEY=<your-key>` and `EXTENSION_ID=<your-local-extension-id>`. Do not commit it. Then run:
+Create `.dev.vars` with `API_KEY`, `EXTENSION_ID`, and `BOOTSTRAP_CODE_HASH`. Do not commit it. Then run:
 
 ```bash
 npm run db:local
 npm run dev
 ```
 
-The local Worker serves at `http://localhost:8787` and the extension popup defaults to that URL.
+The local Worker serves at `http://localhost:8787`; set that URL in the extension popup when pairing locally.
 
 ## API
 
-All `/api/*` routes require `Authorization: Bearer <API_KEY>`. Only the configured extension origin is allowed for cross-origin API requests. The pixel (`/t/:id.png`) and click redirect (`/c/:id`) are public so mail clients can reach them. Events store timestamps, country (from Cloudflare), and user agent. Raw IP addresses are used only to check the ignore list and are not saved with events.
+The dashboard uses a secure HttpOnly session cookie; the extension uses a separate token obtained with a one-time, 10-minute pairing code. Passwords are salted and hashed with PBKDF2. Emails, stats, exports, and ignored IPs are scoped to each account. Admins can create one-use invite links for additional users. Only the configured extension origin is allowed for cross-origin API requests. The pixel (`/t/:id.png`) and click redirect (`/c/:id`) are public so mail clients can reach them. Events store timestamps, country (from Cloudflare), and user agent. Raw IP addresses are used only to check the ignore list and are not saved with events.
 
 ## Legacy server
 
