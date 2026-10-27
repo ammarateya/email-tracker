@@ -2,14 +2,24 @@ const pixel = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwC
 const json = (data, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
 const id = () => crypto.randomUUID().replaceAll('-', '').slice(0, 20);
 const ipOf = request => request.headers.get('CF-Connecting-IP') || '';
+const ipHash = async (ip, secret) => {
+  if (!ip) return null;
+  const data = new TextEncoder().encode(`${secret}:${ip}`);
+  return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', data)), b => b.toString(16).padStart(2, '0')).join('');
+};
 const allowedUrl = value => { try { const u = new URL(value); return ['http:', 'https:'].includes(u.protocol) && !u.username && !u.password; } catch { return false; } };
 const cors = (response, request, env) => { const origin = request.headers.get('Origin'); if (origin === `chrome-extension://${env.EXTENSION_ID}`) { response.headers.set('Access-Control-Allow-Origin', origin); response.headers.set('Access-Control-Allow-Headers', 'Authorization,Content-Type'); response.headers.set('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS'); } return response; };
 const authorized = (request, env) => !!env.API_KEY && request.headers.get('Authorization') === `Bearer ${env.API_KEY}`;
 const rows = async (db, sql, ...args) => (await db.prepare(sql).bind(...args).all()).results;
 const one = async (db, sql, ...args) => await db.prepare(sql).bind(...args).first();
-const record = async (db, request, emailId, type, linkId = null) => {
+const record = async (db, request, emailId, type, linkId = null, secret = '') => {
   const ip = ipOf(request);
   if (ip && await one(db, 'SELECT ip FROM ignored_ips WHERE ip=?', ip)) return;
+  if (type === 'open' && ip && secret) {
+    const email = await one(db, 'SELECT sender_ip_hash, created_at FROM emails WHERE id=?', emailId);
+    const ageSeconds = email ? (Date.now() - Date.parse(email.created_at.replace(' ', 'T') + 'Z')) / 1000 : Infinity;
+    if (email?.sender_ip_hash && ageSeconds >= 0 && ageSeconds < 10 && email.sender_ip_hash === await ipHash(ip, secret)) return;
+  }
   await db.prepare('INSERT INTO events (email_id,link_id,event_type,user_agent,country) VALUES (?,?,?,?,?)').bind(emailId, linkId, type, request.headers.get('User-Agent') || '', request.cf?.country || '').run();
 };
 export default { async fetch(request, env, ctx) {
@@ -17,13 +27,13 @@ export default { async fetch(request, env, ctx) {
   try {
     if (path.startsWith('/t/') && method === 'GET') {
       const emailId = path.slice(3).replace(/\.png$/, '');
-      if (/^[a-f0-9]{12,32}$/.test(emailId) && await one(db, 'SELECT id FROM emails WHERE id=?', emailId)) ctx.waitUntil(record(db, request, emailId, 'open'));
+      if (/^[a-f0-9]{12,32}$/.test(emailId) && await one(db, 'SELECT id FROM emails WHERE id=?', emailId)) ctx.waitUntil(record(db, request, emailId, 'open', null, env.API_KEY));
       return new Response(pixel, { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'no-store, no-cache, max-age=0' } });
     }
     if (path.startsWith('/c/') && method === 'GET') {
       const linkId = path.slice(3), link = await one(db, 'SELECT email_id,original_url FROM links WHERE id=?', linkId);
       if (!link || !allowedUrl(link.original_url)) return json({ error: 'Link not found' }, 404);
-      ctx.waitUntil(record(db, request, link.email_id, 'click', linkId));
+      ctx.waitUntil(record(db, request, link.email_id, 'click', linkId, env.API_KEY));
       return Response.redirect(link.original_url, 302);
     }
     if (path.startsWith('/api/')) {
@@ -35,7 +45,7 @@ export default { async fetch(request, env, ctx) {
         if (typeof body.subject !== 'string' || typeof body.recipient !== 'string' || !Array.isArray(body.links) || body.links.length > 100 || body.subject.length > 500 || body.recipient.length > 1000) return cors(json({ error: 'Invalid email' }, 400), request, env);
         if (body.links.some(u => typeof u !== 'string' || u.length > 2048 || !allowedUrl(u))) return cors(json({ error: 'Invalid link' }, 400), request, env);
         const emailId = id(), links = body.links.map(original_url => ({ original_url, id: id() }));
-        await db.batch([db.prepare('INSERT INTO emails (id,subject,recipient) VALUES (?,?,?)').bind(emailId, body.subject, body.recipient), ...links.map(l => db.prepare('INSERT INTO links (id,email_id,original_url) VALUES (?,?,?)').bind(l.id, emailId, l.original_url))]);
+        await db.batch([db.prepare('INSERT INTO emails (id,subject,recipient,sender_ip_hash) VALUES (?,?,?,?)').bind(emailId, body.subject, body.recipient, await ipHash(ipOf(request), env.API_KEY)), ...links.map(l => db.prepare('INSERT INTO links (id,email_id,original_url) VALUES (?,?,?)').bind(l.id, emailId, l.original_url))]);
         result = { email_id: emailId, pixel_url: `${url.origin}/t/${emailId}.png`, links: links.map(l => ({ original_url: l.original_url, tracked_url: `${url.origin}/c/${l.id}` })) };
       } else if (path === '/api/export.csv' && method === 'GET') {
         const data = await rows(db, `SELECT e.subject,e.recipient,e.created_at,COUNT(CASE WHEN v.event_type='open' THEN 1 END) opens,COUNT(CASE WHEN v.event_type='click' THEN 1 END) clicks,MIN(CASE WHEN v.event_type='open' THEN v.timestamp END) first_open FROM emails e LEFT JOIN events v ON v.email_id=e.id GROUP BY e.id ORDER BY e.created_at DESC LIMIT 10000`);
