@@ -1,0 +1,7 @@
+{
+  "name": "email-tracker",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-10-27",
+  "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": true },
+  "d1_databases": [{ "binding": "DB", "database_name": "email-tracker", "database_id": "00000000-0000-0000-0000-000000000000" }]
+}

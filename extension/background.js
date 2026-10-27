@@ -1,97 +1,27 @@
-// Background service worker — handles API communication
-
-const DEFAULT_SERVER = 'https://mail.ammarateya.com';
-
-async function getServerUrl() {
-    const result = await chrome.storage.sync.get(['serverUrl']);
-    return result.serverUrl || DEFAULT_SERVER;
+const DEFAULT_SERVER = 'http://localhost:8787';
+async function config() {
+  const stored = await chrome.storage.sync.get(['serverUrl', 'apiKey']);
+  return { server: (stored.serverUrl || DEFAULT_SERVER).replace(/\/$/, ''), apiKey: stored.apiKey || '' };
 }
-
-// Listen for messages from content script and popup
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-    if (msg.type === 'CREATE_TRACKING') {
-        handleCreateTracking(msg.data).then(sendResponse);
-        return true; // async response
-    }
-    if (msg.type === 'GET_STATUSES') {
-        handleGetStatuses(msg.data).then(sendResponse);
-        return true;
-    }
-    if (msg.type === 'GET_RECENT') {
-        handleGetRecent().then(sendResponse);
-        return true;
-    }
-    if (msg.type === 'GET_SERVER_URL') {
-        getServerUrl().then(url => sendResponse({ url }));
-        return true;
-    }
-    if (msg.type === 'SET_SERVER_URL') {
-        chrome.storage.sync.set({ serverUrl: msg.url }).then(() => sendResponse({ ok: true }));
-        return true;
-    }
+async function api(path, options = {}) {
+  const { server, apiKey } = await config();
+  const response = await fetch(server + path, { ...options, headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json', ...options.headers } });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+  return { ...data, server };
+}
+chrome.runtime.onMessage.addListener((message, sender, reply) => {
+  (async () => {
+    try {
+      if (message.type === 'GET_CONFIG') return { ...await config(), apiKey: (await config()).apiKey };
+      if (message.type === 'SET_CONFIG') {
+        await chrome.storage.sync.set({ serverUrl: message.serverUrl, apiKey: message.apiKey });
+        return { ok: true };
+      }
+      if (message.type === 'CREATE_TRACKING') return { ok: true, ...await api('/api/emails', { method: 'POST', body: JSON.stringify(message.data) }) };
+      if (message.type === 'GET_RECENT') return { ok: true, ...await api('/api/emails?per_page=10') };
+      return { ok: false, error: 'Unknown message' };
+    } catch (error) { return { ok: false, error: error.message }; }
+  })().then(reply);
+  return true;
 });
-
-async function handleCreateTracking({ subject, recipient, links }) {
-    try {
-        const server = await getServerUrl();
-        const res = await fetch(`${server}/api/emails`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ subject, recipient, links }),
-        });
-        const data = await res.json();
-        // Store the mapping locally for inbox status lookup
-        const key = `track_${normalizeKey(subject, recipient)}`;
-        await chrome.storage.local.set({ [key]: { emailId: data.email_id, createdAt: Date.now() } });
-        return { ok: true, ...data, server };
-    } catch (err) {
-        return { ok: false, error: err.message };
-    }
-}
-
-async function handleGetStatuses({ emails }) {
-    // emails: [{subject, recipient}, ...]
-    // Look up local storage for tracked email IDs, then batch-check server
-    try {
-        const server = await getServerUrl();
-        const results = {};
-
-        for (const { subject, recipient } of emails) {
-            const key = `track_${normalizeKey(subject, recipient)}`;
-            const stored = await chrome.storage.local.get(key);
-            if (stored[key]) {
-                const emailId = stored[key].emailId;
-                try {
-                    const res = await fetch(`${server}/api/emails/${emailId}`);
-                    const data = await res.json();
-                    results[key] = {
-                        tracked: true,
-                        opens: data.total_opens || 0,
-                        clicks: data.total_clicks || 0,
-                        emailId,
-                    };
-                } catch {
-                    results[key] = { tracked: true, opens: 0, clicks: 0, emailId };
-                }
-            }
-        }
-        return results;
-    } catch (err) {
-        return {};
-    }
-}
-
-async function handleGetRecent() {
-    try {
-        const server = await getServerUrl();
-        const res = await fetch(`${server}/api/emails?per_page=10`);
-        const data = await res.json();
-        return { ok: true, emails: data.emails, server };
-    } catch (err) {
-        return { ok: false, error: err.message };
-    }
-}
-
-function normalizeKey(subject, recipient) {
-    return (subject + '||' + recipient).toLowerCase().replace(/\s+/g, ' ').trim();
-}
