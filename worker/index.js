@@ -57,13 +57,13 @@ export default { async fetch(request, env, ctx) {
         const q = url.searchParams.get('q') || '', page = Math.max(1, Number(url.searchParams.get('page')) || 1), per = Math.min(200, Math.max(1, Number(url.searchParams.get('per_page')) || 50));
         const match = `%${q}%`;
         const total = (await one(db, 'SELECT COUNT(*) n FROM emails WHERE subject LIKE ? OR recipient LIKE ?', match, match)).n;
-        const emails = await rows(db, `SELECT e.*, SUM(CASE WHEN v.event_type='open' THEN 1 ELSE 0 END) open_count, SUM(CASE WHEN v.event_type='click' THEN 1 ELSE 0 END) click_count, MAX(CASE WHEN v.event_type='open' THEN v.timestamp END) last_opened FROM emails e LEFT JOIN events v ON v.email_id=e.id WHERE e.subject LIKE ? OR e.recipient LIKE ? GROUP BY e.id ORDER BY e.created_at DESC LIMIT ? OFFSET ?`, match, match, per, (page - 1) * per);
+        const emails = await rows(db, `SELECT e.id,e.subject,e.recipient,e.created_at, SUM(CASE WHEN v.event_type='open' THEN 1 ELSE 0 END) open_count, SUM(CASE WHEN v.event_type='click' THEN 1 ELSE 0 END) click_count, MAX(CASE WHEN v.event_type='open' THEN v.timestamp END) last_opened FROM emails e LEFT JOIN events v ON v.email_id=e.id WHERE e.subject LIKE ? OR e.recipient LIKE ? GROUP BY e.id ORDER BY e.created_at DESC LIMIT ? OFFSET ?`, match, match, per, (page - 1) * per);
         result = { emails, total, page, per_page: per };
       } else if (/^\/api\/emails\/[^/]+$/.test(path)) {
         const emailId = path.split('/')[3];
         if (method === 'DELETE') { await db.prepare('DELETE FROM emails WHERE id=?').bind(emailId).run(); result = { ok: true }; }
         else if (method === 'GET') {
-          const email = await one(db, 'SELECT * FROM emails WHERE id=?', emailId);
+          const email = await one(db, 'SELECT id,subject,recipient,created_at FROM emails WHERE id=?', emailId);
           if (!email) return cors(json({ error: 'Not found' }, 404), request, env);
           const events = await rows(db, 'SELECT v.*,l.original_url FROM events v LEFT JOIN links l ON l.id=v.link_id WHERE v.email_id=? ORDER BY v.timestamp DESC LIMIT 1000', emailId);
           const counts = await one(db, `SELECT SUM(CASE WHEN event_type='open' THEN 1 ELSE 0 END) total_opens, SUM(CASE WHEN event_type='click' THEN 1 ELSE 0 END) total_clicks, COUNT(DISTINCT CASE WHEN event_type='open' THEN user_agent || country END) unique_opens FROM events WHERE email_id=?`, emailId);
