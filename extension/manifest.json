@@ -1,18 +1,33 @@
 {
   "manifest_version": 3,
   "name": "Email Tracker",
-  "version": "1.0.0",
-  "description": "Track email opens and link clicks from Gmail",
-  "permissions": ["storage", "activeTab", "scripting", "tabs"],
-  "host_permissions": ["https://mail.google.com/*", "http://*/*", "https://*/*"],
+  "version": "1.0.1",
+  "description": "Track email opens from Gmail",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://mail.google.com/*",
+    "http://*/*",
+    "https://*/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
-      "matches": ["https://mail.google.com/*"],
-      "js": ["content.js"],
-      "css": ["content.css"],
+      "matches": [
+        "https://mail.google.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
       "run_at": "document_idle"
     }
   ],

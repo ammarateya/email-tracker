@@ -1,4 +1,4 @@
-// Gmail compose integration. Register and rewrite the message before Gmail sends it.
+// Gmail compose integration. Add an open-tracking pixel before Gmail sends the message.
 (() => {
   'use strict';
   if (globalThis.__emailTrackerContentLoaded) return;
@@ -17,11 +17,8 @@
     try {
       const subject = compose.querySelector('input[name="subjectbox"]')?.value || '';
       const recipient = [...compose.querySelectorAll('span[email]')].map(el => el.getAttribute('email')).filter(Boolean).join(', ');
-      const anchors = [...body.querySelectorAll('a[href]')].filter(a => /^https?:\/\//i.test(a.href));
-      const links = anchors.map(a => a.href);
-      const response = await chrome.runtime.sendMessage({ type: 'CREATE_TRACKING', data: { subject, recipient, links } });
+      const response = await chrome.runtime.sendMessage({ type: 'CREATE_TRACKING', data: { subject, recipient, links: [] } });
       if (!response?.ok) throw new Error(response?.error || 'Registration failed');
-      anchors.forEach((anchor, i) => anchor.href = response.links[i].tracked_url);
       const pixel = document.createElement('img');
       pixel.src = response.pixel_url;
       pixel.width = 1;

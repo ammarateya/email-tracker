@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   for (const email of recent.emails) {
     const row = document.createElement('div'); row.className = 'email-row';
     const subject = document.createElement('div'); subject.className = 'subject'; subject.textContent = email.subject || '(no subject)';
-    const meta = document.createElement('div'); meta.className = 'meta'; meta.textContent = `${email.recipient} · ${email.open_count} opens · ${email.click_count} clicks`;
+    const meta = document.createElement('div'); meta.className = 'meta'; meta.textContent = `${email.recipient} · ${email.open_count} opens`;
     row.append(subject, meta); list.append(row);
   }
 });

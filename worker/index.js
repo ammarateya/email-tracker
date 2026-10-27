@@ -34,7 +34,6 @@ export default { async fetch(request, env, ctx) {
     if (path.startsWith('/c/') && method === 'GET') {
       const linkId = path.slice(3), link = await one(db, 'SELECT email_id,original_url FROM links WHERE id=?', linkId);
       if (!link || !allowedUrl(link.original_url)) return json({ error: 'Link not found' }, 404);
-      ctx.waitUntil(record(db, request, link.email_id, 'click', linkId, env.API_KEY));
       return Response.redirect(link.original_url, 302);
     }
     if (path.startsWith('/api/')) {
@@ -47,22 +46,23 @@ export default { async fetch(request, env, ctx) {
       let result;
       if (path === '/api/emails' && method === 'POST') {
         const body = await request.json();
-        if (typeof body.subject !== 'string' || typeof body.recipient !== 'string' || !Array.isArray(body.links) || body.links.length > 100 || body.subject.length > 500 || body.recipient.length > 1000) return cors(json({ error: 'Invalid email' }, 400), request, env);
-        if (body.links.some(u => typeof u !== 'string' || u.length > 2048 || !allowedUrl(u))) return cors(json({ error: 'Invalid link' }, 400), request, env);
-        const emailId = id(), links = body.links.map(original_url => ({ original_url, id: id() }));
-        await db.batch([db.prepare('INSERT INTO emails (id,subject,recipient,sender_ip_hash,owner_id) VALUES (?,?,?,?,?)').bind(emailId, body.subject, body.recipient, await ipHash(ipOf(request), env.API_KEY), user.id), ...links.map(l => db.prepare('INSERT INTO links (id,email_id,original_url) VALUES (?,?,?)').bind(l.id, emailId, l.original_url))]);
-        result = { email_id: emailId, pixel_url: `${url.origin}/t/${emailId}.png`, links: links.map(l => ({ original_url: l.original_url, tracked_url: `${url.origin}/c/${l.id}` })) };
+        const suppliedLinks = body.links == null ? [] : body.links;
+        if (typeof body.subject !== 'string' || typeof body.recipient !== 'string' || !Array.isArray(suppliedLinks) || suppliedLinks.length > 100 || body.subject.length > 500 || body.recipient.length > 1000) return cors(json({ error: 'Invalid email' }, 400), request, env);
+        if (suppliedLinks.some(u => typeof u !== 'string' || u.length > 2048 || !allowedUrl(u))) return cors(json({ error: 'Invalid link' }, 400), request, env);
+        const emailId = id();
+        await db.prepare('INSERT INTO emails (id,subject,recipient,sender_ip_hash,owner_id) VALUES (?,?,?,?,?)').bind(emailId, body.subject, body.recipient, await ipHash(ipOf(request), env.API_KEY), user.id).run();
+        result = { email_id: emailId, pixel_url: `${url.origin}/t/${emailId}.png`, links: suppliedLinks.map(original_url => ({ original_url, tracked_url: original_url })) };
       } else if (path === '/api/export.csv' && method === 'GET') {
-        const data = await rows(db, `SELECT e.subject,e.recipient,e.created_at,COUNT(CASE WHEN v.event_type='open' THEN 1 END) opens,COUNT(CASE WHEN v.event_type='click' THEN 1 END) clicks,MIN(CASE WHEN v.event_type='open' THEN v.timestamp END) first_open FROM emails e LEFT JOIN events v ON v.email_id=e.id WHERE e.owner_id=? GROUP BY e.id ORDER BY e.created_at DESC LIMIT 10000`, user.id);
+        const data = await rows(db, `SELECT e.subject,e.recipient,e.created_at,COUNT(CASE WHEN v.event_type='open' THEN 1 END) opens,MIN(CASE WHEN v.event_type='open' THEN v.timestamp END) first_open FROM emails e LEFT JOIN events v ON v.email_id=e.id WHERE e.owner_id=? GROUP BY e.id ORDER BY e.created_at DESC LIMIT 10000`, user.id);
         const quote = value => '"' + String(value ?? '').replaceAll('"', '""') + '"';
-        const columns = ['subject','recipient','created_at','opens','clicks','first_open'];
+        const columns = ['subject','recipient','created_at','opens','first_open'];
         const csv = [columns.join(','), ...data.map(row => columns.map(key => quote(row[key])).join(','))].join('\r\n');
         return cors(new Response(csv, { headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="email-tracker.csv"', 'Cache-Control': 'no-store' } }), request, env);
       } else if (path === '/api/emails' && method === 'GET') {
         const q = url.searchParams.get('q') || '', page = Math.max(1, Number(url.searchParams.get('page')) || 1), per = Math.min(200, Math.max(1, Number(url.searchParams.get('per_page')) || 50));
         const match = `%${q}%`;
         const total = (await one(db, 'SELECT COUNT(*) n FROM emails WHERE owner_id=? AND (subject LIKE ? OR recipient LIKE ?)', user.id, match, match)).n;
-        const emails = await rows(db, `SELECT e.id,e.subject,e.recipient,e.created_at, SUM(CASE WHEN v.event_type='open' THEN 1 ELSE 0 END) open_count, SUM(CASE WHEN v.event_type='click' THEN 1 ELSE 0 END) click_count, MAX(CASE WHEN v.event_type='open' THEN v.timestamp END) last_opened FROM emails e LEFT JOIN events v ON v.email_id=e.id WHERE e.owner_id=? AND (e.subject LIKE ? OR e.recipient LIKE ?) GROUP BY e.id ORDER BY e.created_at DESC LIMIT ? OFFSET ?`, user.id, match, match, per, (page - 1) * per);
+        const emails = await rows(db, `SELECT e.id,e.subject,e.recipient,e.created_at, SUM(CASE WHEN v.event_type='open' THEN 1 ELSE 0 END) open_count, MAX(CASE WHEN v.event_type='open' THEN v.timestamp END) last_opened FROM emails e LEFT JOIN events v ON v.email_id=e.id WHERE e.owner_id=? AND (e.subject LIKE ? OR e.recipient LIKE ?) GROUP BY e.id ORDER BY e.created_at DESC LIMIT ? OFFSET ?`, user.id, match, match, per, (page - 1) * per);
         result = { emails, total, page, per_page: per };
       } else if (/^\/api\/emails\/[^/]+$/.test(path)) {
         const emailId = path.split('/')[3];
@@ -70,14 +70,13 @@ export default { async fetch(request, env, ctx) {
         else if (method === 'GET') {
           const email = await one(db, 'SELECT id,subject,recipient,created_at FROM emails WHERE id=? AND owner_id=?', emailId, user.id);
           if (!email) return cors(json({ error: 'Not found' }, 404), request, env);
-          const events = await rows(db, 'SELECT v.*,l.original_url FROM events v LEFT JOIN links l ON l.id=v.link_id WHERE v.email_id=? ORDER BY v.timestamp DESC LIMIT 1000', emailId);
-          const counts = await one(db, `SELECT SUM(CASE WHEN event_type='open' THEN 1 ELSE 0 END) total_opens, SUM(CASE WHEN event_type='click' THEN 1 ELSE 0 END) total_clicks, COUNT(DISTINCT CASE WHEN event_type='open' THEN user_agent || country END) unique_opens FROM events WHERE email_id=?`, emailId);
-          const link_stats = await rows(db, `SELECT l.id,l.original_url,COUNT(v.id) click_count FROM links l LEFT JOIN events v ON v.link_id=l.id WHERE l.email_id=? GROUP BY l.id`, emailId);
-          result = { ...email, events, total_opens: counts.total_opens || 0, total_clicks: counts.total_clicks || 0, unique_opens: counts.unique_opens || 0, ignored_opens: 0, link_stats };
+          const events = await rows(db, "SELECT id,email_id,event_type,timestamp,user_agent,country FROM events WHERE email_id=? AND event_type='open' ORDER BY timestamp DESC LIMIT 1000", emailId);
+          const counts = await one(db, `SELECT COUNT(*) total_opens, COUNT(DISTINCT CASE WHEN event_type='open' THEN user_agent || country END) unique_opens FROM events WHERE email_id=? AND event_type='open'`, emailId);
+          result = { ...email, events, total_opens: counts.total_opens || 0, unique_opens: counts.unique_opens || 0, ignored_opens: 0 };
         }
       } else if (path === '/api/stats' && method === 'GET') {
-        const totals = await one(db, `SELECT (SELECT COUNT(*) FROM emails WHERE owner_id=?) total_emails,(SELECT COUNT(*) FROM events v JOIN emails e ON e.id=v.email_id WHERE e.owner_id=? AND v.event_type='open') total_opens,(SELECT COUNT(*) FROM events v JOIN emails e ON e.id=v.email_id WHERE e.owner_id=? AND v.event_type='click') total_clicks,(SELECT COUNT(DISTINCT v.email_id) FROM events v JOIN emails e ON e.id=v.email_id WHERE e.owner_id=? AND v.event_type='open') emails_opened`, user.id, user.id, user.id, user.id);
-        result = { ...totals, open_rate: totals.total_emails ? Math.round(totals.emails_opened / totals.total_emails * 1000) / 10 : 0, activity: await rows(db, `SELECT DATE(v.timestamp) date,SUM(v.event_type='open') opens,SUM(v.event_type='click') clicks FROM events v JOIN emails e ON e.id=v.email_id WHERE e.owner_id=? AND v.timestamp >= DATE('now','-30 days') GROUP BY DATE(v.timestamp) ORDER BY date`, user.id) };
+        const totals = await one(db, `SELECT (SELECT COUNT(*) FROM emails WHERE owner_id=?) total_emails,(SELECT COUNT(*) FROM events v JOIN emails e ON e.id=v.email_id WHERE e.owner_id=? AND v.event_type='open') total_opens,(SELECT COUNT(DISTINCT v.email_id) FROM events v JOIN emails e ON e.id=v.email_id WHERE e.owner_id=? AND v.event_type='open') emails_opened`, user.id, user.id, user.id);
+        result = { ...totals, open_rate: totals.total_emails ? Math.round(totals.emails_opened / totals.total_emails * 1000) / 10 : 0, activity: await rows(db, `SELECT DATE(v.timestamp) date,COUNT(*) opens FROM events v JOIN emails e ON e.id=v.email_id WHERE e.owner_id=? AND v.event_type='open' AND v.timestamp >= DATE('now','-30 days') GROUP BY DATE(v.timestamp) ORDER BY date`, user.id) };
       } else if (path === '/api/ignored-ips' && method === 'GET') result = await rows(db, 'SELECT ip,label,created_at FROM ignored_ips WHERE owner_id=? ORDER BY created_at DESC', user.id);
       else if (path === '/api/ignored-ips' && method === 'POST') { const body = await request.json(); const ip = body.ip || ipOf(request); if (!ip || ip.length > 64) return cors(json({ error: 'Invalid IP' }, 400), request, env); await db.prepare('INSERT OR IGNORE INTO ignored_ips (owner_id,ip,label) VALUES (?,?,?)').bind(user.id, ip, String(body.label || '').slice(0, 100)).run(); result = { ok: true, ip }; }
       else if (path.startsWith('/api/ignored-ips/') && method === 'DELETE') { await db.prepare('DELETE FROM ignored_ips WHERE owner_id=? AND ip=?').bind(user.id, decodeURIComponent(path.slice(17))).run(); result = { ok: true }; }

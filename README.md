@@ -1,15 +1,15 @@
 # Email Tracker
 
-A multi-user Gmail open and link tracker with a dashboard. The Chrome extension adds a tracking pixel and rewrites links before Gmail sends the message. A Cloudflare Worker records events in D1. No paid MailSuite plan or subscription is required.
+A multi-user Gmail open tracker with a dashboard. The Chrome extension adds an open-tracking pixel before Gmail sends the message. A Cloudflare Worker records events in D1. No paid MailSuite plan or subscription is required.
 
 ## What it tracks
 
-- Email opens and link clicks with timestamps
-- Per-message activity and link breakdown
+- Email opens with timestamps
+- Per-message activity
 - Dashboard totals, search, and CSV export
 - Ignored IPs for your own devices
 
-Open counts are estimates: Gmail and Apple Mail may proxy or preload images, and blocked images produce no event. A click only registers when a recipient follows a rewritten link. Tracking does not identify which person opened a message sent to multiple recipients.
+Open counts are estimates: Gmail and Apple Mail may proxy or preload images, and blocked images produce no event. Tracking does not identify which person opened a message sent to multiple recipients.
 
 ## Deploy on Cloudflare
 
@@ -54,7 +54,7 @@ The local Worker serves at `http://localhost:8787`; set that URL in the extensio
 
 ## API
 
-The dashboard uses a secure HttpOnly session cookie; the extension uses a separate token obtained with a one-time, 10-minute pairing code. Passwords are salted and hashed with PBKDF2. Emails, stats, exports, and ignored IPs are scoped to each account. Admins can create one-use invite links for additional users. Only the configured extension origin is allowed for cross-origin API requests. The pixel (`/t/:id.png`) and click redirect (`/c/:id`) are public so mail clients can reach them. Events store timestamps, country (from Cloudflare), and user agent. Raw IP addresses are used only to check the ignore list and are not saved with events.
+The dashboard uses a secure HttpOnly session cookie; the extension uses a separate token obtained with a one-time, 10-minute pairing code. Passwords are salted and hashed with PBKDF2. Emails, stats, exports, and ignored IPs are scoped to each account. Admins can create one-use invite links for additional users. Only the configured extension origin is allowed for cross-origin API requests. The pixel (`/t/:id.png`) and legacy click redirect (`/c/:id`) are public so mail clients can reach previously sent emails. Events store timestamps, country (from Cloudflare), and user agent. Raw IP addresses are used only to check the ignore list and are not saved with events.
 
 ## Legacy server
 
