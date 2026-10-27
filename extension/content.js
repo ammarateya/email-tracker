@@ -1,13 +1,16 @@
 // Gmail compose integration. Register and rewrite the message before Gmail sends it.
 (() => {
   'use strict';
+  if (globalThis.__emailTrackerContentLoaded) return;
+  globalThis.__emailTrackerContentLoaded = true;
   const prepared = new WeakSet();
   const sending = new WeakSet();
   const bodyOf = compose => compose.querySelector('div[g_editable="true"][role="textbox"], div.Am.Al.editable, div[role="textbox"][aria-label*="Body"]');
-  const composeOf = element => element.closest('div[role="dialog"], .ip.iq');
-  const sendButton = compose => compose.querySelector('.T-I.aoO, div[role="button"][aria-label^="Send"]');
+  const composeOf = element => element.closest('div[role="dialog"], .M9, .AD, .ip.iq');
+  const sendButton = compose => compose.querySelector('.T-I.aoO, [role="button"][aria-label^="Send"], button[aria-label^="Send"]');
   async function prepare(compose) {
-    if (prepared.has(compose) || sending.has(compose)) return true;
+    if (prepared.has(compose)) return true;
+    if (sending.has(compose)) return false;
     const body = bodyOf(compose);
     if (!body) return false;
     sending.add(compose);
@@ -33,14 +36,28 @@
       return false;
     } finally { sending.delete(compose); }
   }
-  document.addEventListener('click', async event => {
-    const button = event.target.closest('.T-I.aoO, div[role="button"][aria-label^="Send"]');
+  function markComposes() {
+    document.querySelectorAll('div[role="dialog"], .M9, .ip.iq').forEach(compose => {
+      if (!bodyOf(compose) || compose.querySelector('.email-tracker-ready')) return;
+      const send = sendButton(compose);
+      if (!send) return;
+      const badge = document.createElement('span');
+      badge.className = 'email-tracker-ready';
+      badge.textContent = 'Tracker ready';
+      badge.title = 'Email Tracker will register this message before sending';
+      send.insertAdjacentElement('afterend', badge);
+    });
+  }
+  new MutationObserver(markComposes).observe(document.documentElement, { childList: true, subtree: true });
+  markComposes();
+  window.addEventListener('click', async event => {
+    const button = event.target instanceof Element && event.target.closest('.T-I.aoO, [role="button"][aria-label^="Send"], button[aria-label^="Send"]');
     const compose = button && composeOf(button);
     if (!compose || prepared.has(compose)) return;
     event.preventDefault(); event.stopImmediatePropagation();
     if (await prepare(compose)) button.click();
   }, true);
-  document.addEventListener('keydown', async event => {
+  window.addEventListener('keydown', async event => {
     if (!(event.metaKey || event.ctrlKey) || event.key !== 'Enter') return;
     const compose = composeOf(event.target);
     if (!compose || prepared.has(compose)) return;

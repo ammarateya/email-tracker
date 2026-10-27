@@ -25,3 +25,14 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
   })().then(reply);
   return true;
 });
+
+// Attach to Gmail tabs that were already open when the extension was installed or updated.
+chrome.runtime.onInstalled.addListener(async () => {
+  const tabs = await chrome.tabs.query({ url: 'https://mail.google.com/*' });
+  for (const tab of tabs) {
+    if (tab.id) {
+      try { await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] }); }
+      catch (error) { console.warn('Could not attach to Gmail tab', tab.id, error); }
+    }
+  }
+});
