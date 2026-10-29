@@ -1,70 +1,61 @@
 # Email Tracker
 
-A self-hosted email tracking system. Tracks email opens and link clicks using a tracking pixel and link redirects. Includes a clean analytics dashboard and a Chrome extension that integrates directly into Gmail.
+A multi-user Gmail open tracker with a dashboard. The Chrome extension adds an open-tracking pixel before Gmail sends the message. A Cloudflare Worker records events in D1. No paid MailSuite plan or subscription is required.
 
-<!-- TODO: Add dashboard screenshot -->
+## What it tracks
 
-## How it works
+- Email opens with timestamps
+- Per-message activity
+- Dashboard totals, search, and CSV export
+- Ignored IPs for your own devices
 
-1. When you send an email, the Chrome extension injects an invisible 1x1 tracking pixel and wraps any links with redirect URLs
-2. When the recipient opens the email, their mail client loads the pixel -- the server logs the open with timestamp, IP, and approximate location
-3. When the recipient clicks a link, the server logs the click and redirects them to the original URL
-4. The dashboard shows all tracked emails with open counts, click counts, and a full activity timeline
+Open counts are estimates: Gmail and Apple Mail may proxy or preload images, and blocked images produce no event. Tracking does not identify which person opened a message sent to multiple recipients.
 
-## Architecture
+## Deploy on Cloudflare
 
-- **Backend**: Python (FastAPI) + SQLite
-- **Dashboard**: Single-page app served by the backend (vanilla HTML/CSS/JS)
-- **Chrome Extension**: Manifest V3, integrates into Gmail compose and inbox
-
-## Setup
-
-### Server
-
-The server runs as a Docker container. Only the server operator has access to the tracking data.
+You need a free Cloudflare account, Node.js, and Chrome. D1 and Workers have free tier limits; check Cloudflare's current limits before relying on them for high volume use.
 
 ```bash
-git clone https://github.com/ammarateya/email-tracker.git
-cd email-tracker
-docker-compose up -d
+npm install
+npx wrangler login
+npx wrangler d1 create email-tracker
 ```
 
-The dashboard will be available at `http://localhost:8000`.
+Copy the `database_id` from the create command into `wrangler.jsonc`. Set the Chrome extension ID as a Worker variable:
 
-### Chrome Extension
+```bash
+npx wrangler secret put API_KEY
+npx wrangler secret put EXTENSION_ID
+npx wrangler secret put BOOTSTRAP_CODE_HASH
+npm run db:remote
+npm run deploy
+```
 
-1. Clone or download this repo to your local machine
-2. Open Chrome and go to `chrome://extensions`
-3. Enable **Developer mode** (top right toggle)
-4. Click **Load unpacked** and select the `extension/` folder from this repo
-5. Click the extension icon in the Chrome toolbar
-6. Set the **Server URL** to your server's address (e.g. `http://your-server:8000`)
+Generate a random server-only `API_KEY` with `openssl rand -hex 32`; it is used only for sender preview detection. Set `BOOTSTRAP_CODE_HASH` to the SHA-256 hex digest of a separate random setup code. Keep the original setup code privately for the first admin registration. For `EXTENSION_ID`, use the ID shown at `chrome://extensions` after loading the unpacked `extension/` directory. You can also add a custom domain to the Worker in Cloudflare after deployment.
 
-Once configured, the extension will automatically:
-- Inject tracking into emails you send from Gmail
-- Show open/unread status indicators next to tracked emails in your inbox
+### Extension
+
+1. Go to `chrome://extensions`, enable Developer mode, and load the `extension/` folder unpacked.
+2. Sign in to the dashboard with email and password. Generate a pairing code in Settings, then enter the Worker URL and pairing code in the extension popup.
+3. Refresh Gmail. Compose and send a new message. Check the dashboard to see its activity.
+
+The extension pauses sending while registration completes. If registration fails, it keeps the message in the compose window and shows an error. Gmail changes its interface regularly, so refresh and test with a message to yourself after updating Gmail or the extension.
+
+### Local development
+
+Create `.dev.vars` with `API_KEY`, `EXTENSION_ID`, and `BOOTSTRAP_CODE_HASH`. Do not commit it. Then run:
+
+```bash
+npm run db:local
+npm run dev
+```
+
+The local Worker serves at `http://localhost:8787`; set that URL in the extension popup when pairing locally.
 
 ## API
 
-All endpoints are served from the same origin as the dashboard.
+The dashboard uses a secure HttpOnly session cookie; the extension uses a separate token obtained with a one-time, 10-minute pairing code. Passwords are salted and hashed with PBKDF2. Emails, stats, exports, and ignored IPs are scoped to each account. Admins can create one-use invite links for additional users. Only the configured extension origin is allowed for cross-origin API requests. The pixel (`/t/:id.png`) and legacy click redirect (`/c/:id`) are public so mail clients can reach previously sent emails. Events store timestamps, country (from Cloudflare), and user agent. Raw IP addresses are used only to check the ignore list and are not saved with events.
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/emails` | Register a new tracked email |
-| `GET` | `/api/emails` | List all tracked emails with counts |
-| `GET` | `/api/emails/:id` | Get email detail with event timeline |
-| `DELETE` | `/api/emails/:id` | Delete a tracked email |
-| `GET` | `/api/stats` | Aggregate stats for the overview page |
-| `GET` | `/t/:id.png` | Tracking pixel (logs open event) |
-| `GET` | `/c/:id` | Click redirect (logs click event) |
+## Legacy server
 
-## Roadmap
-
-- Multi-tenant support
-- Notifications on open/click
-- Apple Mail plugin
-- Email scheduling and templates
-
-## License
-
-MIT
+The old FastAPI/SQLite prototype remains in `server/` for reference. The supported deployment is the Cloudflare Worker and D1 setup above. Existing SQLite data is not migrated automatically.

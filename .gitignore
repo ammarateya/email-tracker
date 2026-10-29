@@ -4,3 +4,18 @@ __pycache__/
 *.pyo
 .env
 *.db
+
+.dev.vars
+node_modules/
+.wrangler/
+
+# Local credentials and setup material
+.env.*
+.dev.vars.*
+*.pem
+*.p12
+*.pfx
+*.key
+*.secret
+email-tracker-api-key.txt
+email-tracker-setup-code.txt

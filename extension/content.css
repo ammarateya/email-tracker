@@ -43,3 +43,5 @@
     border-radius: 50%;
     background: #9ca3af;
 }
+
+.email-tracker-ready { display: inline-block; margin-left: 8px; color: #176b3a; font: 11px Arial, sans-serif; vertical-align: middle; pointer-events: none; }
