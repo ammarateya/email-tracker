@@ -5,7 +5,7 @@ import vm from 'node:vm';
 
 const source = readFileSync(new URL('../extension/status.js', import.meta.url), 'utf8');
 
-async function viewSentMessage(emails) {
+async function viewSentMessage(emails, connected = true) {
   const reports = [];
   const badges = [];
   const parent = { querySelector() { return badges[0] || null; }, appendChild(badge) { badges.push(badge); } };
@@ -20,10 +20,11 @@ async function viewSentMessage(emails) {
     addEventListener() {}
   };
   const chrome = { runtime: { async sendMessage(message) {
+    if (message.type === 'GET_CONFIG') return { connected };
     if (message.type === 'GET_TRACKED_STATUS') return { ok: true, emails };
     if (message.type === 'SELF_VIEW') { reports.push(message.emailId); return { ok: true }; }
     throw new Error('Unexpected message');
-  } } };
+  } }, storage: { onChanged: { addListener() {} } } };
   const context = {
     document, chrome, location: { hash: '#sent/message' },
     window: { addEventListener() {} }, MutationObserver: class { observe() {} },
@@ -45,4 +46,10 @@ test('does not guess when two tracked messages have the same subject', async () 
     { id: 'abc123456789', subject: 'Test subject', recipient: 'someone@example.com', open_count: 0 },
     { id: 'def123456789', subject: 'Test subject', recipient: 'other@example.com', open_count: 0 }
   ]), { reports: [], labels: [] });
+});
+
+test('does not request status or sender views when unpaired', async () => {
+  assert.deepEqual(await viewSentMessage([{ id: 'abc123456789', subject: 'Test subject', open_count: 0 }], false), {
+    reports: [], labels: []
+  });
 });

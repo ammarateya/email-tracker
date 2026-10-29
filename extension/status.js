@@ -1,13 +1,14 @@
 // Show the tracked open status in Gmail's Sent list and expanded sent messages.
 (() => {
   'use strict';
-  if (globalThis.__emailTrackerStatusLoaded === 108) return;
-  globalThis.__emailTrackerStatusLoaded = 108;
+  if (globalThis.__emailTrackerStatusLoaded === 109) return;
+  globalThis.__emailTrackerStatusLoaded = 109;
 
   let emails = [];
   let fetchedAt = 0;
   let fetching = null;
   let renderQueued = false;
+  let connected = false;
   const reportedSenderViews = new Set();
   const normalized = value => String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
   const pixelId = image => {
@@ -85,6 +86,7 @@
   }
 
   function reportSenderView(id) {
+    if (!connected) return;
     const key = `${location.hash}:${id}`;
     if (reportedSenderViews.has(key)) return;
     reportedSenderViews.add(key);
@@ -108,6 +110,7 @@
     requestAnimationFrame(render);
   }
   async function fetchStatus(force = false) {
+    if (!connected) return;
     if (fetching) return fetching;
     if (!force && Date.now() - fetchedAt < 15000) return;
     fetching = chrome.runtime.sendMessage({ type: 'GET_TRACKED_STATUS' }).then(result => {
@@ -119,9 +122,24 @@
     return fetching;
   }
 
+  function setConnection(value) {
+    const wasConnected = connected;
+    connected = !!value;
+    if (connected && !wasConnected) void fetchStatus(true);
+    if (!connected && wasConnected) {
+      emails = [];
+      document.querySelectorAll('.email-tracker-status').forEach(badge => badge.remove());
+    }
+  }
+  function refreshConnection() {
+    chrome.runtime.sendMessage({ type: 'GET_CONFIG' }).then(config => setConnection(config?.connected)).catch(() => setConnection(false));
+  }
   new MutationObserver(scheduleRender).observe(document.documentElement, { childList: true, subtree: true });
   window.addEventListener('hashchange', () => { scheduleRender(); void fetchStatus(); });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) void fetchStatus(true); });
-  void fetchStatus(true);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshConnection(); });
+  chrome.storage?.onChanged?.addListener((changes, area) => {
+    if (area === 'local' && changes.extensionToken) setConnection(!!changes.extensionToken.newValue);
+  });
+  refreshConnection();
   setInterval(() => { if (!document.hidden) void fetchStatus(true); }, 30000);
 })();

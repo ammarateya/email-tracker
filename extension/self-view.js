@@ -1,11 +1,12 @@
 // Watch Gmail message images for this user's own tracked pixels.
 (() => {
   'use strict';
-  if (globalThis.__emailTrackerSelfViewLoaded === 104) return;
-  globalThis.__emailTrackerSelfViewLoaded = 104;
+  if (globalThis.__emailTrackerSelfViewLoaded === 109) return;
+  globalThis.__emailTrackerSelfViewLoaded = 109;
   // Gmail fetches images through GoogleImageProxy, so the pixel request cannot identify
   // the sender. Report a view of our own sent pixel over the authenticated extension API.
   const reportedViews = new Map();
+  let connected = false;
   function ownPixelId(img) {
     // Skip only the editable compose body. Gmail can use dialog-like wrappers
     // around opened messages, and those views must still be reported.
@@ -22,6 +23,7 @@
     return null;
   }
   function inspectImage(img) {
+    if (!connected) return;
     const emailId = ownPixelId(img);
     if (!emailId || Date.now() - (reportedViews.get(emailId) || 0) < 3000) return;
     reportedViews.set(emailId, Date.now());
@@ -46,5 +48,12 @@
       else record.addedNodes.forEach(inspectNode);
     }
   }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['src', 'data-src', 'data-image-url'] });
-  document.querySelectorAll('img').forEach(inspectImage);
+  function setConnection(value) {
+    connected = !!value;
+    if (connected) document.querySelectorAll('img').forEach(inspectImage);
+  }
+  chrome.runtime.sendMessage({ type: 'GET_CONFIG' }).then(config => setConnection(config?.connected)).catch(() => {});
+  chrome.storage?.onChanged?.addListener((changes, area) => {
+    if (area === 'local' && changes.extensionToken) setConnection(!!changes.extensionToken.newValue);
+  });
 })();
