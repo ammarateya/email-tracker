@@ -21,7 +21,8 @@ const record = async (db, request, emailId, type, linkId = null, secret = '') =>
     const ageSeconds = email ? (Date.now() - Date.parse(email.created_at.replace(' ', 'T') + 'Z')) / 1000 : Infinity;
     if (email?.sender_ip_hash && ageSeconds >= 0 && ageSeconds < 10 && email.sender_ip_hash === await ipHash(ip, secret)) return;
   }
-  await db.prepare('INSERT INTO events (email_id,link_id,event_type,user_agent,country) SELECT id,?,?,?,? FROM emails WHERE id=? AND sender_view_until_ms<?').bind(linkId, type, request.headers.get('User-Agent') || '', request.cf?.country || '', emailId, Date.now()).run();
+  const userAgent = request.headers.get('User-Agent') || '';
+  await db.prepare("INSERT INTO events (email_id,link_id,event_type,user_agent,country) SELECT id,?,?,?,? FROM emails WHERE id=? AND (sender_view_until_ms<? OR ? NOT LIKE '%GoogleImageProxy%')").bind(linkId, type, userAgent, request.cf?.country || '', emailId, Date.now(), userAgent).run();
 };
 export default { async fetch(request, env, ctx) {
   const url = new URL(request.url), path = url.pathname, method = request.method, db = env.DB;
