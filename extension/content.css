@@ -70,6 +70,16 @@
     box-shadow: 0 0 0 3px #d5efdc;
     flex: none;
 }
+.email-tracker-ready.off {
+    border-color: #dadce0;
+    background: #f1f3f4;
+    color: #5f6368;
+    box-shadow: none;
+}
+.email-tracker-ready.off::before {
+    background: #9aa0a6;
+    box-shadow: 0 0 0 3px #e4e6e8;
+}
 
 .email-tracker-status {
     display: inline-flex;

@@ -39,10 +39,6 @@
     if (!(node instanceof Element)) return;
     if (node.matches('img')) inspectImage(node);
     node.querySelectorAll('img').forEach(inspectImage);
-    if (node.matches('.email-tracker-ready') && node.textContent !== 'Tracking enabled') node.textContent = 'Tracking enabled';
-    node.querySelectorAll('.email-tracker-ready').forEach(badge => {
-      if (badge.textContent !== 'Tracking enabled') badge.textContent = 'Tracking enabled';
-    });
   }
   new MutationObserver(records => {
     for (const record of records) {
@@ -51,5 +47,4 @@
     }
   }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['src', 'data-src', 'data-image-url'] });
   document.querySelectorAll('img').forEach(inspectImage);
-  document.querySelectorAll('.email-tracker-ready').forEach(badge => { badge.textContent = 'Tracking enabled'; });
 })();
