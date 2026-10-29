@@ -40,7 +40,7 @@
       if (!send) return;
       const badge = document.createElement('span');
       badge.className = 'email-tracker-ready';
-      badge.textContent = 'Tracker ready';
+      badge.textContent = 'Tracking enabled';
       badge.title = 'Email Tracker will register this message before sending';
       send.insertAdjacentElement('afterend', badge);
     });

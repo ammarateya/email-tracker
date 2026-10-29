@@ -42,26 +42,33 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
   return true;
 });
 
-// Attach to Gmail tabs that were already open when the extension was installed or updated.
-chrome.runtime.onInstalled.addListener(async () => {
-  await chrome.storage.sync.remove('apiKey');
-  const tabs = await chrome.tabs.query({ url: 'https://mail.google.com/*' });
-  for (const tab of tabs) {
-    if (tab.id) {
-      for (const file of ['content.js', 'self-view.js']) {
-        try { await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: [file] }); }
-        catch (error) { console.warn('Could not attach to Gmail tab', tab.id, file, error); }
-      }
-    }
-  }
-});
-
-// Attach the sender-view watcher when an already-open Gmail tab becomes active.
-chrome.tabs.onActivated.addListener(async ({ tabId }) => {
+async function attachGmail(tabId) {
   try {
     const tab = await chrome.tabs.get(tabId);
     if (tab.url?.startsWith('https://mail.google.com/')) {
+      await chrome.scripting.insertCSS({ target: { tabId }, files: ['content.css'] });
+      await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
       await chrome.scripting.executeScript({ target: { tabId }, files: ['self-view.js'] });
     }
-  } catch (error) { console.warn('Could not attach sender-view watcher', tabId, error); }
+  } catch (error) { console.warn('Could not attach to Gmail tab', tabId, error); }
+}
+
+async function attachOpenGmailTabs() {
+  const tabs = await chrome.tabs.query({ url: 'https://mail.google.com/*' });
+  await Promise.all(tabs.filter(tab => tab.id).map(tab => attachGmail(tab.id)));
+}
+
+chrome.runtime.onInstalled.addListener(async () => {
+  await chrome.storage.sync.remove('apiKey');
+  await attachOpenGmailTabs();
+});
+
+// Gmail navigates between messages without replacing the tab. Attach on every
+// URL update and service-worker start so an existing tab is covered too.
+chrome.runtime.onStartup.addListener(attachOpenGmailTabs);
+chrome.tabs.onActivated.addListener(({ tabId }) => { void attachGmail(tabId); });
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if ((changeInfo.status === 'complete' || changeInfo.url) && tab.url?.startsWith('https://mail.google.com/')) {
+    void attachGmail(tabId);
+  }
 });
