@@ -80,6 +80,16 @@
     background: #9aa0a6;
     box-shadow: 0 0 0 3px #e4e6e8;
 }
+.email-tracker-ready.preparing {
+    border-color: #d9e4fa;
+    background: #f2f6ff;
+    color: #3564a3;
+    box-shadow: none;
+}
+.email-tracker-ready.preparing::before {
+    background: #5b8ad4;
+    box-shadow: 0 0 0 3px #dfeaff;
+}
 
 .email-tracker-status {
     display: inline-flex;
@@ -91,8 +101,10 @@
     font: 600 11px/1.35 Arial, sans-serif;
     white-space: nowrap;
     vertical-align: middle;
-    pointer-events: none;
+    text-decoration: none !important;
+    cursor: pointer;
 }
+.email-tracker-status:hover { filter: brightness(.95); }
 .email-tracker-status::before {
     content: '';
     width: 6px;

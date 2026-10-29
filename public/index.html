@@ -574,6 +574,7 @@
                         <th>Opens</th>
                         <th>Last Opened</th>
                         <th>Sent</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -588,6 +589,7 @@
                             <td>${e.open_count}</td>
                             <td style="color:var(--text-secondary)">${timeAgo(e.last_opened)}</td>
                             <td style="color:var(--text-secondary)">${timeAgo(e.created_at)}</td>
+                            <td><a class="btn btn-outline btn-sm" href="#/emails/${e.id}">View breakdown</a></td>
                         </tr>
                     `).join('')}
                 </tbody>
@@ -609,6 +611,13 @@
             return;
         }
 
+        const countedEvents = email.events.filter(ev => ev.event_type === 'open' && !ev.ignored_sender);
+        const opensByDay = Object.entries(countedEvents.reduce((days, ev) => {
+            const day = ev.timestamp.slice(0, 10);
+            days[day] = (days[day] || 0) + 1;
+            return days;
+        }, {})).sort((a, b) => b[0].localeCompare(a[0]));
+
         app.innerHTML = `
             <div class="detail-header">
                 <a href="#/emails" class="back">
@@ -625,16 +634,28 @@
                     <div class="value">${email.total_opens}</div>
                 </div>
                 <div class="stat-card">
-                    <div class="label">Unique Opens</div>
-                    <div class="value">${email.unique_opens}</div>
+                    <div class="label">First Open</div>
+                    <div class="value" style="font-size:18px">${email.first_opened ? formatDate(email.first_opened) : 'Never'}</div>
                 </div>
                 <div class="stat-card">
-                    <div class="label">Status</div>
-                    <div class="value">${email.total_opens > 0
-                        ? '<span style="color:var(--green)">Opened</span>'
-                        : '<span style="color:var(--gray-400)">Unopened</span>'
-                    }</div>
+                    <div class="label">Latest Open</div>
+                    <div class="value" style="font-size:18px">${email.last_opened ? formatDate(email.last_opened) : 'Never'}</div>
                 </div>
+                <div class="stat-card">
+                    <div class="label">My Views Ignored</div>
+                    <div class="value">${email.ignored_opens}</div>
+                </div>
+            </div>
+
+            <div class="card" style="margin-bottom:24px">
+                <div class="card-header"><h2>Opens by day</h2></div>
+                ${opensByDay.length ? `<div style="padding:18px 24px;display:grid;gap:12px">
+                    ${opensByDay.map(([day, count]) => `<div style="display:flex;align-items:center;gap:16px">
+                        <span style="width:110px;color:var(--text-secondary);font-size:13px">${day}</span>
+                        <div style="height:8px;min-width:4px;width:${Math.max(4, count / Math.max(...opensByDay.map(row => row[1])) * 100)}%;max-width:65%;border-radius:999px;background:var(--green)"></div>
+                        <strong style="font-size:13px">${count}</strong>
+                    </div>`).join('')}
+                </div>` : '<div class="empty-state"><p>No recipient opens recorded yet</p></div>'}
             </div>
 
             <div class="card">

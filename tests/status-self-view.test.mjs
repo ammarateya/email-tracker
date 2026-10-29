@@ -15,12 +15,12 @@ async function viewSentMessage(emails, connected = true) {
     querySelector(selector) { return selector === 'h2.hP' ? heading : null; },
     querySelectorAll() { return []; },
     createElement() {
-      return { className: '', textContent: '', title: '', classList: { toggle() {} } };
+      return { className: '', textContent: '', title: '', classList: { toggle() {} }, addEventListener() {} };
     },
     addEventListener() {}
   };
   const chrome = { runtime: { async sendMessage(message) {
-    if (message.type === 'GET_CONFIG') return { connected };
+    if (message.type === 'GET_CONFIG') return { connected, server: 'https://example.com' };
     if (message.type === 'GET_TRACKED_STATUS') return { ok: true, emails };
     if (message.type === 'SELF_VIEW') { reports.push(message.emailId); return { ok: true }; }
     throw new Error('Unexpected message');

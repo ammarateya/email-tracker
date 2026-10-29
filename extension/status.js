@@ -1,14 +1,15 @@
 // Show the tracked open status in Gmail's Sent list and expanded sent messages.
 (() => {
   'use strict';
-  if (globalThis.__emailTrackerStatusLoaded === 109) return;
-  globalThis.__emailTrackerStatusLoaded = 109;
+  if (globalThis.__emailTrackerStatusLoaded === 110) return;
+  globalThis.__emailTrackerStatusLoaded = 110;
 
   let emails = [];
   let fetchedAt = 0;
   let fetching = null;
   let renderQueued = false;
   let connected = false;
+  let serverUrl = '';
   const reportedSenderViews = new Set();
   const normalized = value => String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
   const pixelId = image => {
@@ -30,15 +31,19 @@
     if (!target) return;
     let badge = target.querySelector(`:scope > .email-tracker-status.${placement}`);
     if (!badge) {
-      badge = document.createElement('span');
+      badge = document.createElement('a');
       badge.className = `email-tracker-status ${placement}`;
+      badge.target = '_blank';
+      badge.rel = 'noopener noreferrer';
+      badge.addEventListener('click', event => event.stopPropagation());
       target.appendChild(badge);
     }
+    badge.href = `${serverUrl}/#/emails/${email.id}`;
     badge.classList.toggle('opened', Number(email.open_count) > 0);
     badge.classList.toggle('pending', Number(email.open_count) === 0);
     const label = statusText(email);
     if (badge.textContent !== label) badge.textContent = label;
-    badge.title = email.last_opened ? `Last opened: ${email.last_opened}` : 'No recipient opens recorded';
+    badge.title = email.last_opened ? `View breakdown · last opened: ${email.last_opened}` : 'View email breakdown';
   }
 
   function matchingEmail(subject, recipient = '') {
@@ -132,7 +137,10 @@
     }
   }
   function refreshConnection() {
-    chrome.runtime.sendMessage({ type: 'GET_CONFIG' }).then(config => setConnection(config?.connected)).catch(() => setConnection(false));
+    chrome.runtime.sendMessage({ type: 'GET_CONFIG' }).then(config => {
+      serverUrl = config?.server || '';
+      setConnection(config?.connected);
+    }).catch(() => setConnection(false));
   }
   new MutationObserver(scheduleRender).observe(document.documentElement, { childList: true, subtree: true });
   window.addEventListener('hashchange', () => { scheduleRender(); void fetchStatus(); });

@@ -35,6 +35,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
       }
       if (message.type === 'SELF_VIEW' && /^[a-f0-9]{12,32}$/.test(message.emailId)) return { ok: true, ...await api(`/api/emails/${message.emailId}/self-view`, { method: 'POST' }) };
       if (message.type === 'CREATE_TRACKING') return { ok: true, ...await api('/api/emails', { method: 'POST', body: JSON.stringify(message.data) }) };
+      if (message.type === 'FINALIZE_TRACKING' && /^[a-f0-9]{12,32}$/.test(message.emailId)) return { ok: true, ...await api(`/api/emails/${message.emailId}/sent`, { method: 'POST', body: JSON.stringify(message.data) }) };
       if (message.type === 'GET_RECENT') return { ok: true, ...await api('/api/emails?per_page=10') };
       if (message.type === 'GET_TRACKED_STATUS') return { ok: true, ...await api('/api/emails?per_page=200') };
       return { ok: false, error: 'Unknown message' };
