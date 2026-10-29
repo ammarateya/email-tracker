@@ -39,7 +39,7 @@
     if (!(node instanceof Element)) return;
     if (node.matches('img')) inspectImage(node);
     node.querySelectorAll('img').forEach(inspectImage);
-    if (node.matches('.email-tracker-ready')) node.textContent = 'Tracking enabled';
+    if (node.matches('.email-tracker-ready') && node.textContent !== 'Tracking enabled') node.textContent = 'Tracking enabled';
     node.querySelectorAll('.email-tracker-ready').forEach(badge => {
       if (badge.textContent !== 'Tracking enabled') badge.textContent = 'Tracking enabled';
     });
