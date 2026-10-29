@@ -36,6 +36,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
       if (message.type === 'SELF_VIEW' && /^[a-f0-9]{12,32}$/.test(message.emailId)) return { ok: true, ...await api(`/api/emails/${message.emailId}/self-view`, { method: 'POST' }) };
       if (message.type === 'CREATE_TRACKING') return { ok: true, ...await api('/api/emails', { method: 'POST', body: JSON.stringify(message.data) }) };
       if (message.type === 'GET_RECENT') return { ok: true, ...await api('/api/emails?per_page=10') };
+      if (message.type === 'GET_TRACKED_STATUS') return { ok: true, ...await api('/api/emails?per_page=200') };
       return { ok: false, error: 'Unknown message' };
     } catch (error) { return { ok: false, error: error.message }; }
   })().then(reply);
@@ -49,6 +50,7 @@ async function attachGmail(tabId) {
       await chrome.scripting.insertCSS({ target: { tabId }, files: ['content.css'] });
       await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
       await chrome.scripting.executeScript({ target: { tabId }, files: ['self-view.js'] });
+      await chrome.scripting.executeScript({ target: { tabId }, files: ['status.js'] });
     }
   } catch (error) { console.warn('Could not attach to Gmail tab', tabId, error); }
 }

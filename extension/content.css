@@ -70,3 +70,37 @@
     box-shadow: 0 0 0 3px #d5efdc;
     flex: none;
 }
+
+.email-tracker-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: 8px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font: 600 11px/1.35 Arial, sans-serif;
+    white-space: nowrap;
+    vertical-align: middle;
+    pointer-events: none;
+}
+.email-tracker-status::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex: none;
+}
+.email-tracker-status.opened {
+    background: #e8f6ed;
+    color: #137333;
+}
+.email-tracker-status.opened::before { background: #188038; }
+.email-tracker-status.pending {
+    background: #f1f3f4;
+    color: #5f6368;
+}
+.email-tracker-status.pending::before { background: #9aa0a6; }
+.email-tracker-status.message {
+    margin-left: 10px;
+    padding: 4px 9px;
+}
