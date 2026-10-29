@@ -1,13 +1,14 @@
 // Show the tracked open status in Gmail's Sent list and expanded sent messages.
 (() => {
   'use strict';
-  if (globalThis.__emailTrackerStatusLoaded === 106) return;
-  globalThis.__emailTrackerStatusLoaded = 106;
+  if (globalThis.__emailTrackerStatusLoaded === 108) return;
+  globalThis.__emailTrackerStatusLoaded = 108;
 
   let emails = [];
   let fetchedAt = 0;
   let fetching = null;
   let renderQueued = false;
+  const reportedSenderViews = new Set();
   const normalized = value => String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
   const pixelId = image => {
     for (const raw of [image.getAttribute('src'), image.getAttribute('data-src'), image.currentSrc]) {
@@ -69,14 +70,30 @@
       if (matches.length !== 1) return;
       const target = message.querySelector('.gE, .gD')?.parentElement || message;
       showBadge(target, matches[0], 'message');
+      reportSenderView(matches[0].id);
     });
     // Some Gmail layouts do not expose a per-message wrapper. In those views,
     // show status by the subject only when the match is unambiguous.
     if (!document.querySelector('.email-tracker-status.message') && /sent|in(?:%3a|:)sent/i.test(location.hash)) {
       const heading = document.querySelector('h2.hP');
       const email = heading && matchingEmail(heading.textContent);
-      if (email) showBadge(heading.parentElement, email, 'message');
+      if (email) {
+        showBadge(heading.parentElement, email, 'message');
+        reportSenderView(email.id);
+      }
     }
+  }
+
+  function reportSenderView(id) {
+    const key = `${location.hash}:${id}`;
+    if (reportedSenderViews.has(key)) return;
+    reportedSenderViews.add(key);
+    chrome.runtime.sendMessage({ type: 'SELF_VIEW', emailId: id }).then(result => {
+      if (!result?.ok) { reportedSenderViews.delete(key); return; }
+      // A proxy request may have arrived just before this report. Refresh the
+      // count after the Worker has marked that sender open as ignored.
+      void fetchStatus(true);
+    }).catch(() => reportedSenderViews.delete(key));
   }
 
   function render() {
