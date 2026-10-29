@@ -33,6 +33,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
         await chrome.storage.local.remove('extensionToken');
         return { ok: true };
       }
+      if (message.type === 'SELF_VIEW' && /^[a-f0-9]{12,32}$/.test(message.emailId)) return { ok: true, ...await api(`/api/emails/${message.emailId}/self-view`, { method: 'POST' }) };
       if (message.type === 'CREATE_TRACKING') return { ok: true, ...await api('/api/emails', { method: 'POST', body: JSON.stringify(message.data) }) };
       if (message.type === 'GET_RECENT') return { ok: true, ...await api('/api/emails?per_page=10') };
       return { ok: false, error: 'Unknown message' };
@@ -47,8 +48,20 @@ chrome.runtime.onInstalled.addListener(async () => {
   const tabs = await chrome.tabs.query({ url: 'https://mail.google.com/*' });
   for (const tab of tabs) {
     if (tab.id) {
-      try { await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] }); }
-      catch (error) { console.warn('Could not attach to Gmail tab', tab.id, error); }
+      for (const file of ['content.js', 'self-view.js']) {
+        try { await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: [file] }); }
+        catch (error) { console.warn('Could not attach to Gmail tab', tab.id, file, error); }
+      }
     }
   }
+});
+
+// Attach the sender-view watcher when an already-open Gmail tab becomes active.
+chrome.tabs.onActivated.addListener(async ({ tabId }) => {
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    if (tab.url?.startsWith('https://mail.google.com/')) {
+      await chrome.scripting.executeScript({ target: { tabId }, files: ['self-view.js'] });
+    }
+  } catch (error) { console.warn('Could not attach sender-view watcher', tabId, error); }
 });

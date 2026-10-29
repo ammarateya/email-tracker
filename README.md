@@ -9,7 +9,7 @@ A multi-user Gmail open tracker with a dashboard. The Chrome extension adds an o
 - Dashboard totals, search, and CSV export
 - Ignored IPs for your own devices
 
-Open counts are estimates: Gmail and Apple Mail may proxy or preload images, and blocked images produce no event. Tracking does not identify which person opened a message sent to multiple recipients.
+Open counts are estimates: Gmail and Apple Mail may proxy or preload images, and blocked images produce no event. Sender-view detection requires the extension to be active in the Gmail tab; it cannot identify the viewer from Google image-proxy traffic alone. Tracking does not identify which person opened a message sent to multiple recipients.
 
 ## Deploy on Cloudflare
 
@@ -39,7 +39,7 @@ Generate a random server-only `API_KEY` with `openssl rand -hex 32`; it is used 
 2. Sign in to the dashboard with email and password. Generate a pairing code in Settings, then enter the Worker URL and pairing code in the extension popup.
 3. Refresh Gmail. Compose and send a new message. Check the dashboard to see its activity.
 
-The extension pauses sending while registration completes. If registration fails, it keeps the message in the compose window and shows an error. Gmail changes its interface regularly, so refresh and test with a message to yourself after updating Gmail or the extension.
+The extension pauses sending while registration completes. If registration fails, it keeps the message in the compose window and shows an error. When you view a tracked message in your own Gmail, the extension marks the matching Google image-proxy request as a sender view so it does not count as a recipient open. You can correct older or ambiguous opens with the Ignore my view / Count this controls in the email timeline. Gmail changes its interface regularly, so refresh and test with a message to yourself after updating Gmail or the extension.
 
 ### Local development
 

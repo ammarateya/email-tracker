@@ -267,6 +267,7 @@
             font-size: 14px;
         }
         .timeline-item:last-child { border-bottom: none; }
+        .timeline-item.ignored { opacity: 0.55; }
         .timeline-icon {
             width: 32px; height: 32px;
             border-radius: 50%;
@@ -639,21 +640,22 @@
             <div class="card">
                 <div class="card-header">
                     <h2>Activity Timeline</h2>
-                    <span style="font-size:13px;color:var(--text-secondary)">${email.events.length} events</span>
+                    <span style="font-size:13px;color:var(--text-secondary)">${email.total_opens} counted opens</span>
                 </div>
                 ${email.events.length === 0
                     ? '<div class="empty-state"><p>No activity yet</p></div>'
                     : `<div class="timeline">
                         ${email.events.map(ev => `
-                            <div class="timeline-item">
+                            <div class="timeline-item ${ev.ignored_sender ? 'ignored' : ''}">
                                 <div class="timeline-icon ${ev.event_type}">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                                 </div>
                                 <div class="timeline-body">
-                                    <div class="title">Email opened</div>
+                                    <div class="title">${ev.ignored_sender ? 'Ignored sender view' : 'Email opened'}</div>
                                     <div class="detail">${[ev.country, ev.ip, ev.user_agent ? shortenUA(ev.user_agent) : ''].filter(Boolean).join(' &middot; ')}</div>
                                 </div>
                                 <div class="timeline-time">${formatDate(ev.timestamp)}</div>
+                                <button class="btn btn-outline btn-sm" onclick="toggleIgnoredOpen('${email.id}', ${ev.id}, ${ev.ignored_sender ? 0 : 1})">${ev.ignored_sender ? 'Count this' : 'Ignore my view'}</button>
                             </div>
                         `).join('')}
                     </div>`
@@ -664,6 +666,12 @@
                 <button class="btn btn-danger btn-sm" onclick="deleteEmail('${email.id}')">Delete Email</button>
             </div>
         `;
+    }
+
+    async function toggleIgnoredOpen(emailId, eventId, ignored) {
+        const response = await fetch(API + `/api/events/${eventId}/ignore`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ ignored: !!ignored }) });
+        if (!response.ok) { alert('Could not update this open'); return; }
+        renderDetail(emailId);
     }
 
     async function deleteEmail(id) {

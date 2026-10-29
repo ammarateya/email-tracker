@@ -47,6 +47,7 @@
   }
   new MutationObserver(markComposes).observe(document.documentElement, { childList: true, subtree: true });
   markComposes();
+
   window.addEventListener('click', async event => {
     const button = event.target instanceof Element && event.target.closest('.T-I.aoO, [role="button"][aria-label^="Send"], button[aria-label^="Send"]');
     const compose = button && composeOf(button);

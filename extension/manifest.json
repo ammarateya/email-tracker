@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Email Tracker",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "description": "Track email opens from Gmail",
   "permissions": [
     "storage",
@@ -23,7 +23,8 @@
         "https://mail.google.com/*"
       ],
       "js": [
-        "content.js"
+        "content.js",
+        "self-view.js"
       ],
       "css": [
         "content.css"
