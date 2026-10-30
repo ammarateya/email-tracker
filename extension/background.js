@@ -15,6 +15,17 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
   (async () => {
     try {
       if (message.type === 'GET_CONFIG') { const { server, connected } = await config(); return { server, connected }; }
+      if (message.type === 'GOOGLE_AUTH') {
+        const token = await chrome.identity.getAuthToken({ interactive: true });
+        await chrome.storage.local.set({ gmailToken: token.token });
+        return { ok: true };
+      }
+      if (message.type === 'GOOGLE_DISCONNECT') {
+        const stored = await chrome.storage.local.get('gmailToken');
+        if (stored.gmailToken) chrome.identity.removeCachedAuthToken({ token: stored.gmailToken });
+        await chrome.storage.local.remove('gmailToken');
+        return { ok: true };
+      }
       if (message.type === 'PAIR') {
         const server = String(message.serverUrl || DEFAULT_SERVER).replace(/\/$/, '');
         const response = await fetch(server + '/api/auth/extension-claim', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: message.code }) });

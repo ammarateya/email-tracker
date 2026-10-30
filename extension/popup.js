@@ -3,8 +3,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   const codeInput = document.getElementById('pairCode');
   const status = document.getElementById('status');
   const list = document.getElementById('list');
+  const googleButton = document.getElementById('googleButton');
   const config = await chrome.runtime.sendMessage({ type: 'GET_CONFIG' });
   serverInput.value = config.server;
+  const googleState = await chrome.storage.local.get('gmailToken');
+  googleButton.textContent = googleState.gmailToken ? 'Gmail connected' : 'Connect Gmail';
+  googleButton.onclick = async () => {
+    const result = await chrome.runtime.sendMessage({ type: googleState.gmailToken ? 'GOOGLE_DISCONNECT' : 'GOOGLE_AUTH' });
+    if (result.ok) location.reload();
+  };
   document.getElementById('openDashboard').addEventListener('click', event => { event.preventDefault(); chrome.tabs.create({ url: serverInput.value }); });
   document.getElementById('pairButton').onclick = async () => {
     const result = await chrome.runtime.sendMessage({ type: 'PAIR', serverUrl: serverInput.value.trim(), code: codeInput.value.trim() });

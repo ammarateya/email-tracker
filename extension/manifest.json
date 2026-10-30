@@ -7,13 +7,19 @@
     "storage",
     "activeTab",
     "scripting",
-    "tabs"
+    "tabs",
+    "identity"
   ],
   "host_permissions": [
     "https://mail.google.com/*",
     "http://*/*",
-    "https://*/*"
+    "https://*/*",
+    "https://www.googleapis.com/*"
   ],
+  "oauth2": {
+    "client_id": "1008175289957-h14ae1ji4u3hpbhd0sm0oggepp8316rg.apps.googleusercontent.com",
+    "scopes": ["https://www.googleapis.com/auth/gmail.metadata"]
+  },
   "background": {
     "service_worker": "background.js"
   },
