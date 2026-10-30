@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Email Tracker",
-  "version": "1.0.14",
+  "version": "1.0.15",
   "description": "Track email opens from Gmail",
   "permissions": [
     "storage",
@@ -17,7 +17,7 @@
     "https://www.googleapis.com/*"
   ],
   "oauth2": {
-    "client_id": "1008175289957-0po066np465jo849j9oh5occrg1rjhie.apps.googleusercontent.com",
+    "client_id": "1008175289957-0fhtjbgdip9mvuf0l9g5rqcspm5egtno.apps.googleusercontent.com",
     "scopes": ["https://www.googleapis.com/auth/gmail.metadata"]
   },
   "background": {

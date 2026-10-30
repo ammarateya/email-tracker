@@ -18,7 +18,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
       if (message.type === 'GOOGLE_AUTH') {
         const redirectUri = chrome.identity.getRedirectURL();
         const params = new URLSearchParams({
-          client_id: '1008175289957-0po066np465jo849j9oh5occrg1rjhie.apps.googleusercontent.com',
+          client_id: '1008175289957-0fhtjbgdip9mvuf0l9g5rqcspm5egtno.apps.googleusercontent.com',
           response_type: 'token',
           redirect_uri: redirectUri,
           scope: 'https://www.googleapis.com/auth/gmail.metadata',
