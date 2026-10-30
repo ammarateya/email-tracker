@@ -16,8 +16,23 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     try {
       if (message.type === 'GET_CONFIG') { const { server, connected } = await config(); return { server, connected }; }
       if (message.type === 'GOOGLE_AUTH') {
-        const token = await chrome.identity.getAuthToken({ interactive: true });
-        await chrome.storage.local.set({ gmailToken: token.token });
+        const redirectUri = chrome.identity.getRedirectURL();
+        const params = new URLSearchParams({
+          client_id: '1008175289957-0po066np465jo849j9oh5occrg1rjhie.apps.googleusercontent.com',
+          response_type: 'token',
+          redirect_uri: redirectUri,
+          scope: 'https://www.googleapis.com/auth/gmail.metadata',
+          access_type: 'online',
+          prompt: 'consent'
+        });
+        const resultUrl = await chrome.identity.launchWebAuthFlow({
+          url: `https://accounts.google.com/o/oauth2/v2/auth?${params}`,
+          interactive: true
+        });
+        const fragment = new URL(resultUrl).hash.slice(1);
+        const token = new URLSearchParams(fragment).get('access_token');
+        if (!token) throw new Error('Google did not return an access token');
+        await chrome.storage.local.set({ gmailToken: token });
         return { ok: true };
       }
       if (message.type === 'GOOGLE_DISCONNECT') {
