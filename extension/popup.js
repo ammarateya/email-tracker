@@ -9,8 +9,21 @@ document.addEventListener('DOMContentLoaded', async () => {
   const googleState = await chrome.storage.local.get('gmailToken');
   googleButton.textContent = googleState.gmailToken ? 'Gmail connected' : 'Connect Gmail';
   googleButton.onclick = async () => {
-    const result = await chrome.runtime.sendMessage({ type: googleState.gmailToken ? 'GOOGLE_DISCONNECT' : 'GOOGLE_AUTH' });
-    if (result.ok) location.reload();
+    googleButton.disabled = true;
+    googleButton.textContent = googleState.gmailToken ? 'Disconnecting…' : 'Connecting…';
+    try {
+      const result = await chrome.runtime.sendMessage({ type: googleState.gmailToken ? 'GOOGLE_DISCONNECT' : 'GOOGLE_AUTH' });
+      if (result?.ok) location.reload();
+      else {
+        status.textContent = result?.error || 'Google connection failed';
+        googleButton.disabled = false;
+        googleButton.textContent = googleState.gmailToken ? 'Gmail connected' : 'Connect Gmail';
+      }
+    } catch (error) {
+      status.textContent = error?.message || 'Google connection failed';
+      googleButton.disabled = false;
+      googleButton.textContent = googleState.gmailToken ? 'Gmail connected' : 'Connect Gmail';
+    }
   };
   document.getElementById('openDashboard').addEventListener('click', event => { event.preventDefault(); chrome.tabs.create({ url: serverInput.value }); });
   document.getElementById('pairButton').onclick = async () => {
